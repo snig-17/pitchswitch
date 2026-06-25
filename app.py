@@ -9,8 +9,9 @@ from collections import defaultdict
 
 import streamlit as st
 
-from core.replay import load_match, get_demo_matches, MatchEvent, MatchState, FINAL_THIRD_X
-from core.heat import create_heat, MatchHeat
+from core.replay import load_match, get_demo_matches, FINAL_THIRD_X
+from core.heat import create_heat
+from core.director import create_director
 
 st.set_page_config(
     page_title="PitchSwitch",
@@ -39,6 +40,8 @@ if "running" not in st.session_state:
     st.session_state.recent_events = defaultdict(list)  # match_id -> last N events
     st.session_state.scores = {}  # match_id -> "H-A"
     st.session_state.tick = 0
+    st.session_state.director = None
+    st.session_state.last_source = ""  # how the last switch was decided
 
 # ---------------------------------------------------------------------------
 # Sidebar
@@ -87,6 +90,9 @@ if start and not st.session_state.running:
             st.session_state.scores[match_id] = "0-0"
 
         st.session_state.current_match = st.session_state.match_data[0][1].match_id
+        st.session_state.director = create_director(favourite_team=favourite_team)
+        st.session_state.director.current_match_id = st.session_state.current_match
+        st.session_state.director.warmup()  # pre-load the LLM in the background
         st.session_state.matches_loaded = True
         st.session_state.running = True
         st.session_state.switch_count = 0
@@ -103,20 +109,6 @@ if stop:
     st.rerun()
 
 # ---------------------------------------------------------------------------
-# Personalization bias
-# ---------------------------------------------------------------------------
-FAV_BIAS = 1.3
-
-def apply_personalization(heat: MatchHeat, fav: str) -> float:
-    """Return biased danger score if favourite team is playing."""
-    if not fav:
-        return heat.danger
-    fav_lower = fav.strip().lower()
-    if fav_lower in heat.home_team.lower() or fav_lower in heat.away_team.lower():
-        return min(heat.danger * FAV_BIAS, 1.0)
-    return heat.danger
-
-# ---------------------------------------------------------------------------
 # Process next batch of events (called on each rerun)
 # ---------------------------------------------------------------------------
 EVENTS_PER_TICK = 8  # process N events per rerun cycle
@@ -127,8 +119,6 @@ def process_tick():
         return
 
     all_done = True
-    best_match = None
-    best_danger = -1.0
     fav = st.session_state.get("favourite_team_val", "")
 
     for events, info in st.session_state.match_data:
@@ -169,29 +159,44 @@ def process_tick():
 
         st.session_state.event_idx[mid] = end_idx
 
-        # Compute biased danger for switching
-        biased = apply_personalization(heat, fav)
-        if biased > best_danger:
-            best_danger = biased
-            best_match = mid
+    # Switch decision (delegated to the Director: heuristic + Granite tiers)
+    director = st.session_state.director
+    if director is not None:
+        director.favourite_team = fav  # keep in sync if user edits mid-run
 
-    # Switch decision
-    if best_match and best_match != st.session_state.current_match:
-        best_heat = st.session_state.heats[best_match]
-        if best_heat.should_switch or best_danger > 0.4:
-            reason = best_heat.switch_reason or f"Danger rising ({best_danger:.2f})"
-            # Personalization note
-            fav = st.session_state.get("favourite_team_val", "")
-            if fav and (fav.lower() in best_heat.home_team.lower() or
-                         fav.lower() in best_heat.away_team.lower()):
-                reason = f"Your team! {reason}"
+        def _apply(decision, *, force_log: bool):
+            """Apply a SwitchDecision to the UI state."""
+            target_heat = st.session_state.heats[decision.target_match_id]
+            switched = decision.target_match_id != st.session_state.current_match
+            st.session_state.current_match = decision.target_match_id
+            st.session_state.narration = decision.narration
+            st.session_state.last_source = decision.source
+            # Count/log a switch when the target actually changed, or when a
+            # Granite re-pick confirms the same match (force_log upgrades text).
+            if switched:
+                st.session_state.switch_count += 1
+                st.session_state.switch_log.append(
+                    (target_heat.current_minute, decision.narration, decision.target_label)
+                )
+            elif force_log and st.session_state.switch_log:
+                # Replace the last log entry's narration with Granite's reasoning
+                minute, _, label = st.session_state.switch_log[-1]
+                st.session_state.switch_log[-1] = (minute, decision.narration, label)
 
-            st.session_state.current_match = best_match
-            st.session_state.switch_count += 1
-            st.session_state.narration = f"SWITCH: {reason}"
-            st.session_state.switch_log.append(
-                (best_heat.current_minute, reason, best_heat.label)
-            )
+        # Immediate (heuristic / penalty) decision
+        decision = director.decide(st.session_state.heats)
+        if decision and decision.should_switch:
+            _apply(decision, force_log=False)
+
+        # Async Granite re-pick arrives a tick or two later (non-blocking)
+        granite_dec = director.get_pending_decision()
+        if granite_dec and granite_dec.should_switch:
+            _apply(granite_dec, force_log=True)
+
+        # Async Granite narration (clear-winner path) may also arrive later
+        pending = director.get_pending_narration()
+        if pending:
+            st.session_state.narration = pending
 
     if all_done:
         st.session_state.running = False

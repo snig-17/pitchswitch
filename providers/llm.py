@@ -15,6 +15,12 @@ import json
 import requests
 from abc import ABC, abstractmethod
 
+from dotenv import load_dotenv
+
+# Load .env so OLLAMA_MODEL / LLM_PROVIDER / API keys are available before
+# any provider reads them via os.getenv.
+load_dotenv()
+
 
 class LLMProvider(ABC):
     """Base class for LLM providers."""
@@ -29,8 +35,20 @@ class LLMProvider(ABC):
         """Check if the provider is reachable."""
         ...
 
+    def warmup(self) -> None:
+        """Optionally pre-load the model so the first real call isn't slow.
+        Default is a no-op; cloud providers don't need it.
+        """
+        return None
+
 
 class OllamaProvider(LLMProvider):
+    # Generation timeout. Cold model loads are handled by warmup(), so once
+    # warm a generation should comfortably finish within this window.
+    GEN_TIMEOUT = 30
+    # Cold load of a local model can take 30s+; give warmup a long leash.
+    WARMUP_TIMEOUT = 180
+
     def __init__(self):
         self.base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         self.model = os.getenv("OLLAMA_MODEL", "granite3.1-dense")
@@ -41,12 +59,24 @@ class OllamaProvider(LLMProvider):
                 f"{self.base_url}/api/generate",
                 json={"model": self.model, "prompt": prompt, "stream": False,
                       "options": {"num_predict": max_tokens}},
-                timeout=10,
+                timeout=self.GEN_TIMEOUT,
             )
             resp.raise_for_status()
             return resp.json().get("response", "")
         except Exception:
             return ""
+
+    def warmup(self) -> None:
+        """Load the model into memory with a tiny throwaway generation."""
+        try:
+            requests.post(
+                f"{self.base_url}/api/generate",
+                json={"model": self.model, "prompt": "hi", "stream": False,
+                      "options": {"num_predict": 1}},
+                timeout=self.WARMUP_TIMEOUT,
+            )
+        except Exception:
+            pass
 
     def is_available(self) -> bool:
         try:
