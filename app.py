@@ -90,8 +90,8 @@ if start and not st.session_state.running:
         with st.spinner("Warming Granite + Docling, building the broadcast "
                         "(first run for these teams takes ~30s)..."):
             from providers.llm import get_provider
-            get_provider().warmup()  # synchronous so switch narration is Granite
             try:
+                get_provider().warmup()  # synchronous so switch narration is Granite
                 bd = assemble_unified(MATCHUPS, favourite=favourite_team,
                                       t0=0, dur=120, fps=8,
                                       voice=get_tts().available())
