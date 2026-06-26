@@ -38,6 +38,7 @@ if "running" not in st.session_state:
     st.session_state.lead_times = []
     st.session_state.switch_log = []  # [(minute, reason, match_label), ...]
     st.session_state.recent_events = defaultdict(list)  # match_id -> last N events
+    st.session_state.flag_times = defaultdict(list)  # match_id -> [should_switch times]
     st.session_state.scores = {}  # match_id -> "H-A"
     st.session_state.tick = 0
     st.session_state.director = None
@@ -105,6 +106,7 @@ if start and not st.session_state.running:
         st.session_state.event_idx = {}
         st.session_state.scores = {}
         st.session_state.recent_events = defaultdict(list)
+        st.session_state.flag_times = defaultdict(list)
 
         for match_id, label in get_demo_matches():
             events, info = load_match(match_id)
@@ -139,6 +141,7 @@ if stop:
 # Process next batch of events (called on each rerun)
 # ---------------------------------------------------------------------------
 EVENTS_PER_TICK = 8  # process N events per rerun cycle
+PREDICT_WINDOW = 120.0  # lead window for accuracy (matches scripts/calibrate.py)
 
 def process_tick():
     """Advance the replay by processing the next batch of events."""
@@ -163,6 +166,11 @@ def process_tick():
             event = events[i]
             heat.update(event)
 
+            # Record anticipation signals: every time the model flags this
+            # match as switch-worthy (same signal scripts/calibrate.py scores).
+            if heat.should_switch:
+                st.session_state.flag_times[mid].append(event.match_seconds)
+
             # Track recent events for display
             if event.event_type in ("Shot", "Carry", "Pressure", "Pass", "Foul Committed"):
                 st.session_state.recent_events[mid].append(event)
@@ -173,16 +181,15 @@ def process_tick():
                 st.session_state.scores[mid] = f"{heat.home_score}-{heat.away_score}"
                 st.session_state.goals_seen += 1
 
-                # Check if we predicted this goal (switch trigger in prior 180s)
+                # Real lead-time measurement: did the model flag this match in
+                # the window strictly BEFORE the goal? (anticipation, not
+                # reaction). Lead = goal time - earliest flag in the window.
                 goal_sec = event.match_seconds
-                recent_switches = [
-                    s for s in st.session_state.switch_log
-                    if s[2] == info.label
-                ]
-                # Simple check: did we switch to this match recently?
-                if st.session_state.current_match == mid:
+                flags = [f for f in st.session_state.flag_times.get(mid, [])
+                         if goal_sec - PREDICT_WINDOW <= f < goal_sec]
+                if flags:
                     st.session_state.goals_predicted += 1
-                    st.session_state.lead_times.append(30)  # approximate
+                    st.session_state.lead_times.append(goal_sec - min(flags))
 
         st.session_state.event_idx[mid] = end_idx
 
