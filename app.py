@@ -53,7 +53,9 @@ with st.sidebar:
     st.header("PitchSwitch")
     st.caption("AI Multi-Match Whip-Around")
 
-    favourite_team = st.text_input("Favourite team", placeholder="e.g. Argentina")
+    favourite_team = st.text_input(
+        "Favourite team(s)", placeholder="e.g. Argentina, South Korea",
+        help="Comma-separated. Small nations get an extra danger boost.")
     speed = st.slider("Replay speed", 10, 200, 60, step=10,
                        help="Higher = faster replay")
 
@@ -180,7 +182,7 @@ def process_tick():
     # Switch decision (delegated to the Director: heuristic + Granite tiers)
     director = st.session_state.director
     if director is not None:
-        director.favourite_team = fav  # keep in sync if user edits mid-run
+        director.set_favourites(fav)  # keep in sync if user edits mid-run
 
         # --- Demo: forced Granite showdown -------------------------------
         # Set up a near-tie between two matches so the Director's ambiguous
@@ -190,8 +192,7 @@ def process_tick():
         # can't break the tie past AMBIGUITY_THRESHOLD even if a favourite
         # ends up pinned.
         def _is_fav(h):
-            f = director.favourite_team.strip().lower()
-            return bool(f) and (f in h.home_team.lower() or f in h.away_team.lower())
+            return director.is_favourite(h)
 
         if st.session_state.force_showdown:
             st.session_state.force_showdown = False
@@ -245,9 +246,11 @@ def process_tick():
                 (b, 0.58, "Danger critical - late surge"),
             ):
                 h = st.session_state.heats[mid]
-                raw = target
-                if _is_fav(h) and director.fav_bias:
-                    raw = min(target / director.fav_bias, 1.0)
+                # Undo this match's danger multiplier so the *biased* danger
+                # lands on the intended target (keeps the near-tie even if a
+                # favourite / small nation is pinned).
+                mult = director.personalizer.multiplier(h.home_team, h.away_team)
+                raw = min(target / mult, 1.0) if mult else target
                 h.danger, h.should_switch, h.about_to_ignite = raw, True, True
                 h.switch_reason = reason
             # Damp every other match (incl. a biased favourite) so the pinned
@@ -346,13 +349,14 @@ if st.session_state.matches_loaded:
         # Show the danger the Director ranks on (favourite bias applied), so
         # the ticker matches the switching decisions.
         director = st.session_state.director
+        matched = None
         if director is not None:
             danger = director.biased_danger(heat)
-            is_fav = director.is_favourite(heat)
+            matched = director.favourite_label(heat)
         else:
             danger = heat.danger
-            is_fav = False
-        fav_tag = " *" if is_fav and danger != heat.danger else ""
+        is_small = bool(matched) and director.personalizer.is_small_nation(matched)
+        fav_tag = " *" if matched and danger != heat.danger else ""
 
         with cols[i]:
             # Highlight current match
@@ -360,6 +364,13 @@ if st.session_state.matches_loaded:
                 st.markdown(f"### {info.label}")
             else:
                 st.markdown(f"**{info.label}**")
+
+            # Show which favourite this match involves
+            if matched:
+                badge = f"YOUR TEAM: {matched}"
+                if is_small:
+                    badge += " (small nation)"
+                st.caption(badge)
 
             st.metric(
                 label=f"{heat.current_minute}'",
@@ -377,9 +388,10 @@ if st.session_state.matches_loaded:
                 st.progress(progress_val, text=f"{danger:.2f}{fav_tag}")
 
     director = st.session_state.director
-    if director is not None and director.favourite_team:
-        st.caption(f"\\* danger boosted {director.fav_bias:g}x for your team "
-                    f"({director.favourite_team})")
+    if director is not None and director.personalizer.active:
+        p = director.personalizer
+        st.caption(f"\\* danger boosted for your team(s): {p.fav_bias:g}x normally, "
+                    f"{p.small_nation_bias:g}x for small nations")
 
     st.divider()
 

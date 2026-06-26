@@ -18,6 +18,7 @@ import threading
 from dataclasses import dataclass, field
 
 from core.heat import MatchHeat
+from core.personalize import Personalizer
 from providers.llm import LLMProvider, get_provider
 
 # Ambiguity threshold: if top 2 matches are within this delta,
@@ -48,8 +49,7 @@ class SwitchDecision:
 class Director:
     """Orchestrates multi-match switching decisions."""
     provider: LLMProvider = field(default_factory=get_provider)
-    favourite_team: str = ""
-    fav_bias: float = 1.3
+    personalizer: Personalizer = field(default_factory=Personalizer)
 
     # State
     current_match_id: int | None = None
@@ -145,26 +145,26 @@ class Director:
                 return narr
         return None
 
+    def set_favourites(self, raw: str) -> None:
+        """Update the favourite team(s) from a comma-separated string."""
+        self.personalizer = Personalizer.from_input(raw)
+
     def biased_danger(self, heat: MatchHeat) -> float:
         """Public: the danger the Director actually ranks on (favourite bias
         applied). Use this for display so the UI matches switching decisions."""
         return self._apply_bias(heat)
 
     def is_favourite(self, heat: MatchHeat) -> bool:
-        """Whether this match involves the viewer's favourite team."""
-        if not self.favourite_team:
-            return False
-        fav = self.favourite_team.strip().lower()
-        return fav in heat.home_team.lower() or fav in heat.away_team.lower()
+        """Whether this match involves one of the viewer's favourite teams."""
+        return self.personalizer.is_favourite(heat.home_team, heat.away_team)
+
+    def favourite_label(self, heat: MatchHeat) -> str | None:
+        """The favourite team name this match involves, or None."""
+        return self.personalizer.matched_team(heat.home_team, heat.away_team)
 
     def _apply_bias(self, heat: MatchHeat) -> float:
-        """Apply favourite team bias to danger score."""
-        if not self.favourite_team:
-            return heat.danger
-        fav = self.favourite_team.strip().lower()
-        if fav in heat.home_team.lower() or fav in heat.away_team.lower():
-            return min(heat.danger * self.fav_bias, 1.0)
-        return heat.danger
+        """Apply favourite team bias to danger score (delegated)."""
+        return self.personalizer.biased(heat.danger, heat.home_team, heat.away_team)
 
     def _is_llm_available(self) -> bool:
         """Check LLM availability (cached)."""
@@ -273,11 +273,8 @@ class Director:
         for mid, heat, biased_danger in top_matches:
             state = heat.get_state_summary()
             context = heat.get_recent_context(3)
-            is_fav = ""
-            if self.favourite_team:
-                fav = self.favourite_team.strip().lower()
-                if fav in heat.home_team.lower() or fav in heat.away_team.lower():
-                    is_fav = " [VIEWER'S FAVOURITE TEAM]"
+            matched = self.personalizer.matched_team(heat.home_team, heat.away_team)
+            is_fav = f" [VIEWER'S FAVOURITE TEAM: {matched}]" if matched else ""
 
             lines.append(f"\n  {heat.label} ({state['score']}, {state['minute']}'){is_fav}")
             lines.append(f"    Danger: {state['danger']:.2f} (derivative: {state['derivative']:+.4f}/s)")
@@ -314,11 +311,10 @@ class Director:
         state = heat.get_state_summary()
         context = heat.get_recent_context(5)
 
-        is_fav = ""
-        if self.favourite_team:
-            fav = self.favourite_team.strip().lower()
-            if fav in heat.home_team.lower() or fav in heat.away_team.lower():
-                is_fav = f" The viewer follows {self.favourite_team}."
+        matched = self.personalizer.matched_team(heat.home_team, heat.away_team)
+        is_fav = f" The viewer follows {matched}." if matched else ""
+        if matched and self.personalizer.is_small_nation(matched):
+            is_fav += " (a small nation broadcasters usually ignore)."
 
         prompt = (
             f"You are a match commentator. Generate a one-sentence switch call.\n"
@@ -347,11 +343,8 @@ class Director:
         minute = state["minute"]
 
         # Personalization prefix
-        prefix = ""
-        if self.favourite_team:
-            fav = self.favourite_team.strip().lower()
-            if fav in heat.home_team.lower() or fav in heat.away_team.lower():
-                prefix = f"Your team! "
+        matched = self.personalizer.matched_team(heat.home_team, heat.away_team)
+        prefix = f"Your team {matched}! " if matched else ""
 
         if "Penalty" in heat.switch_reason:
             return f"{prefix}Switch to {heat.label} - PENALTY! ({score}, {minute}')"
@@ -370,15 +363,15 @@ class Director:
     def _penalty_narration(self, heat: MatchHeat) -> str:
         """Special narration for penalty events."""
         state = heat.get_state_summary()
-        prefix = ""
-        if self.favourite_team:
-            fav = self.favourite_team.strip().lower()
-            if fav in heat.home_team.lower() or fav in heat.away_team.lower():
-                prefix = "YOUR TEAM! "
+        matched = self.personalizer.matched_team(heat.home_team, heat.away_team)
+        prefix = f"YOUR TEAM {matched}! " if matched else ""
         return (f"{prefix}PENALTY at {heat.label}! "
                 f"({state['score']}, {state['minute']}')")
 
 
 def create_director(favourite_team: str = "") -> Director:
-    """Create a new Director with the configured LLM provider."""
-    return Director(favourite_team=favourite_team)
+    """Create a new Director with the configured LLM provider.
+
+    favourite_team accepts a comma-separated list of teams.
+    """
+    return Director(personalizer=Personalizer.from_input(favourite_team))
