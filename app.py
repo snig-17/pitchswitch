@@ -131,10 +131,34 @@ st.caption("One AI whip-around feed over real player tracking — the Director "
 
 if not st.session_state.matches_loaded:
     st.markdown(
-        "<div style='background:#15311a;border:1px solid #2c5135;border-radius:8px;"
-        "padding:14px 16px;color:#e8efe9'>Pick your favourite team(s), then hit "
-        "<b>Start Demo</b>. The Director watches both matches and cuts you to the "
-        "one about to ignite.</div>",
+        "<div style='max-width:680px'>"
+        "<div style='color:#ffd400;font-family:Oswald,sans-serif;letter-spacing:2px;"
+        "font-size:13px;text-transform:uppercase;font-weight:700;margin:2px 0 16px'>"
+        "Like RedZone, but it cuts before the goal</div>"
+        "<div style='background:#0a1a0f;border:1px solid #20402a;border-radius:12px;padding:20px 22px'>"
+        "<div style='font-family:Oswald,sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;"
+        "color:#9fdcae;margin-bottom:16px'>LIVE DANGER — WHO GETS THE CUT</div>"
+        "<div style='display:flex;align-items:center;gap:14px;margin-bottom:12px'>"
+        "<span style='width:180px;font-family:Oswald,sans-serif;font-weight:600;font-size:13px;"
+        "text-transform:uppercase'>South Korea v Germany</span>"
+        "<span style='flex:1;height:9px;border-radius:5px;background:rgba(255,255,255,.1);overflow:hidden'>"
+        "<span style='display:block;height:100%;width:72%;background:#ff3b3b'></span></span>"
+        "<span style='width:48px;text-align:right;font-family:Oswald,sans-serif;font-weight:700;"
+        "color:#ff3b3b'>0.72</span></div>"
+        "<div style='display:flex;align-items:center;gap:14px'>"
+        "<span style='width:180px;font-family:Oswald,sans-serif;font-weight:600;font-size:13px;"
+        "text-transform:uppercase'>France v Argentina</span>"
+        "<span style='flex:1;height:9px;border-radius:5px;background:rgba(255,255,255,.1);overflow:hidden'>"
+        "<span style='display:block;height:100%;width:34%;background:#4da6ff'></span></span>"
+        "<span style='width:48px;text-align:right;font-family:Oswald,sans-serif;font-weight:700;"
+        "color:#9fb0c4'>0.34</span></div>"
+        "<div style='color:#ffe08a;font-family:Oswald,sans-serif;font-weight:700;font-size:12px;"
+        "margin-top:14px'>▲ +0.38 — the Director would cut to South Korea v Germany</div>"
+        "</div>"
+        "<div style='color:#9fb0c4;font-size:14px;margin-top:18px'>An illustrative snapshot. "
+        "Pick your favourite team(s) in the sidebar and hit <b>Start Demo</b> to watch the real "
+        "thing play out live.</div>"
+        "</div>",
         unsafe_allow_html=True)
 elif not st.session_state.get("broadcast_html"):
     err = st.session_state.get("broadcast_error", "")
