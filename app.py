@@ -8,6 +8,7 @@ import streamlit.components.v1 as components
 
 from core.livefeed import build_broadcast as broadcast_canvas
 from core.metrica import build_unified_broadcast as assemble_unified
+from providers.tts import get_tts
 
 st.set_page_config(
     page_title="PitchSwitch",
@@ -59,20 +60,42 @@ MATCHUPS = [
 ]
 
 if start and not st.session_state.running:
-    with st.spinner("Warming Granite + Docling, building the broadcast..."):
-        from providers.llm import get_provider
-        get_provider().warmup()  # synchronous so switch narration is Granite
-        try:
-            bd = assemble_unified(MATCHUPS, favourite=favourite_team,
-                                  t0=0, dur=120, fps=8)
-            st.session_state.broadcast_html = broadcast_canvas(bd)
-            st.session_state.schedule = bd["schedule"]
+    import hashlib
+    import json
+    from pathlib import Path
+    cache_dir = Path("data/cache")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = hashlib.md5(f"{favourite_team.lower()}".encode()).hexdigest()[:10]
+    cache_file = cache_dir / f"broadcast_{key}.json"
+
+    if cache_file.exists():
+        # Instant: reuse a previously built broadcast for these favourites.
+        with st.spinner("Loading broadcast..."):
+            cached = json.loads(cache_file.read_text())
+            st.session_state.broadcast_html = cached["html"]
+            st.session_state.schedule = [tuple(s) for s in cached["schedule"]]
             st.session_state.broadcast_error = ""
-        except Exception as exc:
-            st.session_state.broadcast_error = str(exc)
-            st.session_state.broadcast_html = ""
-        st.session_state.matches_loaded = True
-        st.session_state.running = True
+    else:
+        with st.spinner("Warming Granite + Docling, building the broadcast "
+                        "(first run for these teams takes ~30s)..."):
+            from providers.llm import get_provider
+            get_provider().warmup()  # synchronous so switch narration is Granite
+            try:
+                bd = assemble_unified(MATCHUPS, favourite=favourite_team,
+                                      t0=0, dur=120, fps=8,
+                                      voice=get_tts().available())
+                html = broadcast_canvas(bd)
+                narrs = [g.get("narration", "") for g in bd["games"]]
+                sched = [(t, narrs[gi]) for t, gi in bd["schedule"]]
+                st.session_state.broadcast_html = html
+                st.session_state.schedule = sched
+                st.session_state.broadcast_error = ""
+                cache_file.write_text(json.dumps({"html": html, "schedule": sched}))
+            except Exception as exc:
+                st.session_state.broadcast_error = str(exc)
+                st.session_state.broadcast_html = ""
+    st.session_state.matches_loaded = True
+    st.session_state.running = True
     st.rerun()
 
 if stop:
@@ -103,5 +126,5 @@ else:
     sched = st.session_state.get("schedule", [])
     if sched:
         with st.expander("Director's switch calls"):
-            for t, gi, narr in sched:
+            for t, narr in sched:
                 st.caption(f"**{int(t // 60)}:{int(t % 60):02d}** — {narr}")

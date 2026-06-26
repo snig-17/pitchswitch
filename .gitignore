@@ -13,3 +13,6 @@ data/*.json
 
 # Metrica tracking CSVs (large; download via scripts/get_metrica.sh)
 data/metrica/*.csv
+
+# Cached pre-built broadcasts
+data/cache/

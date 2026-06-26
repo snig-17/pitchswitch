@@ -203,15 +203,24 @@ if(F.length) requestAnimationFrame(frame); else pitch();
 
 
 _BROADCAST_TEMPLATE = """
-<div style="background:#0d1f12;border-radius:8px;padding:6px">
+<div style="background:#0d1f12;border-radius:8px;padding:6px;position:relative">
 <canvas id="bc" width="900" height="560" style="width:100%;height:auto;display:block"></canvas>
+<div id="unlock" onclick="unlock()" style="display:none;position:absolute;top:10px;
+  right:10px;cursor:pointer;background:#ff3b3b;color:#fff;padding:6px 10px;
+  border-radius:6px;font:bold 13px sans-serif">&#128266; Tap for commentary</div>
+<audio id="au"></audio>
 </div>
 <script>
 const D = __DATA__;
 const cv = document.getElementById('bc'), ctx = cv.getContext('2d');
+const au = document.getElementById('au'), ub = document.getElementById('unlock');
 const W = cv.width, H = cv.height;
 const HOME = D.home_color, AWAY = D.away_color, SKIN = '#f0c8a0';
-const SCHED = D.schedule;       // [[t, gi, reason], ...]
+const SCHED = D.schedule;       // [[t, gi], ...]
+let lastGi = -1, audioOk = false, pendingAudio = null;
+function unlock(){ audioOk = true; ub.style.display='none'; if(pendingAudio) playClip(pendingAudio); }
+function playClip(b64){ if(!b64) return; au.src='data:audio/mp3;base64,'+b64;
+  au.play().then(()=>{audioOk=true;}).catch(()=>{audioOk=false; pendingAudio=b64; ub.style.display='block';}); }
 const t0 = performance.now();
 const G0 = D.games[0].frames, START = G0.length ? G0[0].t : 0;
 const ENDt = G0.length ? G0[G0.length-1].t : 1;
@@ -234,14 +243,16 @@ function avatar(x,y,color){
   ctx.fillStyle=SKIN; ctx.beginPath(); ctx.arc(x,y-7,3.6,0,7); ctx.fill();
 }
 function lerp(a,b,f){return a+(b-a)*f;}
-function onAir(at){ let gi=0,st=START,reason=''; for(const s of SCHED){ if(s[0]<=at){gi=s[1];st=s[0];reason=s[2];} else break; } return [gi,st,reason]; }
+function onAir(at){ let gi=0,st=START; for(const s of SCHED){ if(s[0]<=at){gi=s[1];st=s[0];} else break; } return [gi,st]; }
 function caption(game, at){ let c=''; for(const e of game.captions){ if(e[0]<=at) c=e[1]; else break; } return c; }
 
 function draw(now){
   let at = START + (now-t0)/1000 * D.speed;
-  if (at > ENDt) at = START + ((at-START) % (ENDt-START || 1));   // loop
-  const [gi, switchT, reason] = onAir(at);
+  if (at > ENDt){ at = START + ((at-START) % (ENDt-START || 1)); lastGi=-1; }   // loop
+  const [gi, switchT] = onAir(at);
   const g = D.games[gi], F = g.frames;
+  const reason = g.narration;
+  if (gi !== lastGi){ lastGi = gi; if(audioOk) playClip(g.audio); else if(g.audio){pendingAudio=g.audio; ub.style.display='block';} }
   let i=0; while(i<F.length-1 && F[i+1].t<=at) i++;
   const a=F[i], b=F[Math.min(i+1,F.length-1)];
   const span=Math.max(b.t-a.t,0.001), f=Math.max(0,Math.min(1,(at-a.t)/span));
@@ -323,6 +334,7 @@ def build_broadcast(bdata, speed=1.4, home_color="#4da6ff", away_color="#ff8c42"
     games = [{
         "label": gd["label"],
         "home": gd.get("home", "Home"), "away": gd.get("away", "Away"),
+        "narration": gd.get("narration", ""), "audio": gd.get("audio"),
         "captions": gd["captions"],
         "frames": [{"t": fr.t, "b": list(fr.ball) if fr.ball else None,
                     "h": [list(p) for p in fr.home], "a": [list(p) for p in fr.away]}

@@ -152,7 +152,7 @@ def _narrate(home, away, danger, favourite, grounding, provider):
 def build_unified_broadcast(matchups, favourite: str = "", t0: float = 0.0,
                             dur: float = 120.0, fps: int = 8,
                             margin: float = 0.12, dwell: float = 5.0,
-                            narrate: bool = True):
+                            narrate: bool = True, voice: bool = False):
     """One broadcast over real tracking: the Director cuts to whichever match's
     danger is pulling ahead (rising differential). Each switch gets a
     Granite-grounded narration. matchups: [{game, home, away}].
@@ -181,23 +181,28 @@ def build_unified_broadcast(matchups, favourite: str = "", t0: float = 0.0,
             "captions": _relabel(load_events(m["game"], t0, dur), m["home"], m["away"]),
         })
 
+    # One Granite-grounded narration per match (reused on each cut), plus
+    # optional spoken audio. Two LLM calls total instead of one per switch.
+    for g in games:
+        peak = max(g["danger"]) if g["danger"] else 0.35
+        g["narration"] = _narrate(g["home"], g["away"], peak, favourite,
+                                   grounding, provider)
+        g["audio"] = None
+        if voice:
+            try:
+                import base64
+                from providers.tts import get_tts
+                clip = get_tts().synthesize(g["narration"])
+                if clip:
+                    g["audio"] = base64.b64encode(clip).decode("ascii")
+            except Exception:
+                pass
+
     times = [f.t for f in min((g["frames"] for g in games), key=len)]
     on = 0
     last_switch = -1e9
     prev_diff = 0.0
-    granite_cap = 4                              # cap Granite calls to keep Start fast
-    used = 0
-
-    def narr_for(gi, d):
-        nonlocal used
-        prov = provider if used < granite_cap else None
-        if prov is not None and prov.is_warm():
-            used += 1
-        return _narrate(games[gi]["home"], games[gi]["away"], d,
-                        favourite, grounding, prov)
-
-    schedule = [[times[0] if times else t0, 0,
-                 narr_for(0, games[0]["danger"][0] if games[0]["danger"] else 0.0)]]
+    schedule = [[times[0] if times else t0, 0]]   # [time, game_index]
     for k, t in enumerate(times):
         cur = games[on]["danger"][k] if k < len(games[on]["danger"]) else 0.0
         best, bestd = on, cur
@@ -212,7 +217,7 @@ def build_unified_broadcast(matchups, favourite: str = "", t0: float = 0.0,
         if best != on and diff > margin and rising and t - last_switch > dwell:
             on = best
             last_switch = t
-            schedule.append([round(t, 1), on, narr_for(on, bestd)])
+            schedule.append([round(t, 1), on])
         prev_diff = diff
     return {"games": games, "schedule": schedule}
 
