@@ -9,18 +9,27 @@ from collections import defaultdict
 
 import streamlit as st
 
-import matplotlib.pyplot as plt
+import streamlit.components.v1 as components
 
 from core.replay import load_match, get_demo_matches, FINAL_THIRD_X
 from core.heat import create_heat
 from core.director import create_director
-from core.pitchcam import render_feed
+from core.livefeed import build_feed, build_broadcast as broadcast_canvas
+from core.metrica import build_broadcast as assemble_broadcast
 
 st.set_page_config(
     page_title="PitchSwitch",
     page_icon="",
     layout="wide",
 )
+
+# Real-match video feeds (official FIFA YouTube uploads) per demo match_id.
+# Used by the "Video feed" main-view mode; swapped when the Director switches.
+VIDEO_FEEDS = {
+    7580: "https://www.youtube.com/watch?v=6C6oOcDFmLY",  # France v Argentina (FIFA, Match 50)
+    7576: "https://www.youtube.com/watch?v=4rp2aLQl7vg",  # Portugal v Spain (FIFA, Match 7)
+    7567: "https://www.youtube.com/watch?v=OKjV2SQfKrw",  # Korea Republic v Germany (FIFA, Match 43)
+}
 
 # ---------------------------------------------------------------------------
 # Session state init
@@ -47,6 +56,8 @@ if "running" not in st.session_state:
     st.session_state.director = None
     st.session_state.last_source = ""  # how the last switch was decided
     st.session_state.last_switch_tick = -99  # for the "ON AIR" feed badge
+    st.session_state.feed_match = None  # which match the live canvas is showing
+    st.session_state.feed_html = ""     # cached canvas HTML (stable between switches)
     st.session_state.force_showdown = False  # demo: trigger ambiguous Granite call
     st.session_state.showdown_mids = None    # the two matches pinned into a tie
     st.session_state.showdown_ttl = 0        # ticks remaining to hold the tie
@@ -63,6 +74,13 @@ with st.sidebar:
         help="Comma-separated. Small nations get an extra danger boost.")
     speed = st.slider("Replay speed", 10, 200, 60, step=10,
                        help="Higher = faster replay")
+    feed_mode = st.radio(
+        "Main feed", ["Tactical cam", "Tracking feed", "Video feed"],
+        help="Tactical cam = pitch synced to the model. Tracking feed = real "
+             "25fps player movement (Metrica), cuts between matches. "
+             "Video feed = real FIFA video (blocked from embedding).")
+    video_mode = feed_mode == "Video feed"
+    tracking_mode = feed_mode == "Tracking feed"
 
     col_a, col_b = st.columns(2)
     with col_a:
@@ -111,6 +129,7 @@ if start and not st.session_state.running:
         st.session_state.scores = {}
         st.session_state.recent_events = defaultdict(list)
         st.session_state.flag_times = defaultdict(list)
+        st.session_state.feed_match = None
 
         for match_id, label in get_demo_matches():
             events, info = load_match(match_id)
@@ -366,17 +385,69 @@ if st.session_state.matches_loaded and st.session_state.current_match:
     main_col, stats_col = st.columns([3, 1])
 
     with main_col:
-        st.subheader(f"{heat.label} — {score} ({heat.current_minute}')")
+        if tracking_mode:
+            st.subheader("Live Tracking Broadcast — real 25fps movement")
+        else:
+            st.subheader(f"{heat.label} — {score} ({heat.current_minute}')")
 
-        # Live tactical pitch-cam (broadcast feed) — cuts to the current match
         recent = st.session_state.recent_events.get(mid, [])
         director = st.session_state.director
         just_switched = (st.session_state.tick - st.session_state.last_switch_tick) <= 4
         is_fav = director.is_favourite(heat) if director is not None else False
-        fig = render_feed(heat, recent, score,
-                          just_switched=just_switched, is_favourite=is_fav)
-        st.pyplot(fig, use_container_width=True)
-        plt.close(fig)
+
+        if tracking_mode:
+            # Real 25fps tracking broadcast (Metrica). Self-contained canvas:
+            # plays both matches, cuts between them client-side per a danger
+            # schedule, with play-by-play captions. Built once and cached.
+            if not st.session_state.get("broadcast_html"):
+                try:
+                    bd = assemble_broadcast(games=(1, 2), t0=0, dur=120, fps=8)
+                    st.session_state.broadcast_html = broadcast_canvas(bd)
+                except Exception:
+                    st.session_state.broadcast_html = ""
+            if st.session_state.broadcast_html:
+                components.html(st.session_state.broadcast_html, height=600,
+                                scrolling=False)
+                st.caption("Real 25fps player tracking (Metrica open data). A "
+                           "representative stand-in for the licensed broadcast "
+                           "feed — FIFA blocks real match video from embedding. "
+                           "Teams are anonymised, so Docling/personalization use "
+                           "the World Cup matches in the other feed modes.")
+            else:
+                st.warning("Tracking data not found. Run `bash scripts/get_metrica.sh` "
+                           "to download the Metrica sample data.")
+        elif video_mode:
+            # Real match video (official FIFA). Same URL persists across reruns
+            # so playback is continuous; it reloads only when we switch matches.
+            url = VIDEO_FEEDS.get(mid)
+            if url:
+                st.video(url, autoplay=True, muted=True)
+                st.caption("Live feed cuts to the match the Director picks "
+                           "(autoplay is muted; unmute for commentary). Real "
+                           "footage isn't time-synced to the replay data.")
+            else:
+                st.info("No video feed configured for this match.")
+        else:
+            # Smooth client-side canvas feed. Rebuild only when the match
+            # changes (on a switch) so the HTML is byte-identical between
+            # reruns and the canvas keeps animating instead of restarting.
+            if st.session_state.get("feed_match") != mid:
+                match_events = next((evs for evs, info in st.session_state.match_data
+                                     if info.match_id == mid), [])
+                idx = st.session_state.event_idx.get(mid, 0)
+                cur_t = match_events[idx - 1].match_seconds if idx > 0 else 0.0
+                window = [
+                    (e.match_seconds, e.location[0], e.location[1], e.team,
+                     e.event_type == "Shot", e.shot_outcome == "Goal")
+                    for e in match_events
+                    if e.location and cur_t - 2 <= e.match_seconds <= cur_t + 300
+                ]
+                feed_speed = max(2, speed / 15)  # match-sec per real-sec
+                st.session_state.feed_html = build_feed(
+                    window, heat.home_team, heat.away_team, heat.danger,
+                    cur_t, feed_speed, heat.label, score, is_fav)
+                st.session_state.feed_match = mid
+            components.html(st.session_state.feed_html, height=600, scrolling=False)
 
         # Recent events feed (text play-by-play under the feed)
         with st.expander("Play-by-play", expanded=False):
@@ -498,6 +569,9 @@ if st.session_state.matches_loaded:
 # ---------------------------------------------------------------------------
 # Auto-rerun while running
 # ---------------------------------------------------------------------------
-if st.session_state.running:
-    time.sleep(0.15)  # ~6-7 FPS refresh rate
+if st.session_state.running and not tracking_mode:
+    # Tracking feed is a self-contained canvas that animates on its own clock,
+    # so we don't rerun in that mode (a rerun would reload + restart it).
+    # Video mode refreshes slowly so the embedded clip plays smoothly.
+    time.sleep(3.0 if video_mode else 0.15)
     st.rerun()

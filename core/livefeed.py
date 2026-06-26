@@ -202,6 +202,100 @@ if(F.length) requestAnimationFrame(frame); else pitch();
 """
 
 
+_BROADCAST_TEMPLATE = """
+<div style="background:#0d1f12;border-radius:8px;padding:6px">
+<canvas id="bc" width="900" height="560" style="width:100%;height:auto;display:block"></canvas>
+</div>
+<script>
+const D = __DATA__;
+const cv = document.getElementById('bc'), ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const HOME = D.home_color, AWAY = D.away_color, SKIN = '#f0c8a0';
+const SCHED = D.schedule;       // [[t, gi, reason], ...]
+const t0 = performance.now();
+const G0 = D.games[0].frames, START = G0.length ? G0[0].t : 0;
+const ENDt = G0.length ? G0[G0.length-1].t : 1;
+
+function pitch(){
+  ctx.fillStyle='#15311a'; ctx.fillRect(0,0,W,H);
+  for(let s=0;s<6;s++){if(s%2){ctx.fillStyle='rgba(255,255,255,0.025)';ctx.fillRect(s*W/6,0,W/6,H);}}
+  ctx.strokeStyle='#cfe8d0'; ctx.lineWidth=2; ctx.globalAlpha=0.9;
+  ctx.strokeRect(6,6,W-12,H-12);
+  ctx.beginPath(); ctx.moveTo(W/2,6); ctx.lineTo(W/2,H-6); ctx.stroke();
+  ctx.beginPath(); ctx.arc(W/2,H/2,60,0,7); ctx.stroke();
+  const y1=0.21*H,y2=0.79*H; ctx.strokeRect(6,y1,0.16*W,y2-y1); ctx.strokeRect(W-6-0.16*W,y1,0.16*W,y2-y1);
+  ctx.globalAlpha=1;
+}
+function avatar(x,y,color){
+  ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(x,y+11,7,2.4,0,0,7); ctx.fill();
+  ctx.fillStyle=color; ctx.beginPath();
+  ctx.moveTo(x-6,y+9); ctx.quadraticCurveTo(x-7,y-2,x-3.5,y-3);
+  ctx.lineTo(x+3.5,y-3); ctx.quadraticCurveTo(x+7,y-2,x+6,y+9); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=SKIN; ctx.beginPath(); ctx.arc(x,y-7,3.6,0,7); ctx.fill();
+}
+function lerp(a,b,f){return a+(b-a)*f;}
+function onAir(at){ let gi=0,st=START,reason=''; for(const s of SCHED){ if(s[0]<=at){gi=s[1];st=s[0];reason=s[2];} else break; } return [gi,st,reason]; }
+function caption(game, at){ let c=''; for(const e of game.captions){ if(e[0]<=at) c=e[1]; else break; } return c; }
+
+function draw(now){
+  let at = START + (now-t0)/1000 * D.speed;
+  if (at > ENDt) at = START + ((at-START) % (ENDt-START || 1));   // loop
+  const [gi, switchT, reason] = onAir(at);
+  const g = D.games[gi], F = g.frames;
+  let i=0; while(i<F.length-1 && F[i+1].t<=at) i++;
+  const a=F[i], b=F[Math.min(i+1,F.length-1)];
+  const span=Math.max(b.t-a.t,0.001), f=Math.max(0,Math.min(1,(at-a.t)/span));
+
+  pitch();
+  if(a.b){ const bx=a.b[0]; if(bx>0.62||bx<0.38){ctx.globalAlpha=0.18;ctx.fillStyle='rgba(255,59,59,1)';
+    if(bx>0.62)ctx.fillRect(0.62*W,6,0.38*W-6,H-12); else ctx.fillRect(6,6,0.38*W-6,H-12); ctx.globalAlpha=1;} }
+  const nh=Math.min(a.h.length,b.h.length);
+  for(let k=0;k<nh;k++) avatar(lerp(a.h[k][0],b.h[k][0],f)*W, lerp(a.h[k][1],b.h[k][1],f)*H, HOME);
+  const na=Math.min(a.a.length,b.a.length);
+  for(let k=0;k<na;k++) avatar(lerp(a.a[k][0],b.a[k][0],f)*W, lerp(a.a[k][1],b.a[k][1],f)*H, AWAY);
+  if(a.b&&b.b){ const bx=lerp(a.b[0],b.b[0],f)*W, by=lerp(a.b[1],b.b[1],f)*H;
+    ctx.beginPath(); ctx.arc(bx,by,6,0,7); ctx.fillStyle='#fff'; ctx.fill(); ctx.strokeStyle='#000'; ctx.lineWidth=1.5; ctx.stroke(); }
+
+  // overlay
+  const mm=Math.floor(at/60), ss=Math.floor(at%60);
+  ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.fillText(g.label+'  \\u25b6 LIVE', 16, 26);
+  ctx.fillStyle='#bcd'; ctx.font='13px sans-serif'; ctx.fillText(mm+':'+(ss<10?'0':'')+ss, 16, 46);
+  ctx.fillStyle=HOME; ctx.fillText('\\u25cf Home', 16, H-44);
+  ctx.fillStyle=AWAY; ctx.fillText('\\u25cf Away', 90, H-44);
+
+  // switch banner (brief, after a cut)
+  if (at - switchT < 2.6 && reason){ ctx.fillStyle='rgba(255,59,59,0.85)'; ctx.fillRect(0,60,W,30);
+    ctx.fillStyle='#fff'; ctx.font='bold 15px sans-serif'; ctx.fillText('\\u25b6 '+reason, 16, 80); }
+
+  // play-by-play caption (lower third)
+  const cap = caption(g, at);
+  if(cap){ ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,H-30,W,30);
+    ctx.fillStyle='#fff'; ctx.font='14px sans-serif'; ctx.fillText(cap, 16, H-10); }
+  requestAnimationFrame(draw);
+}
+if(D.games[0].frames.length) requestAnimationFrame(draw); else pitch();
+</script>
+"""
+
+
+def build_broadcast(bdata, speed=1.4, home_color="#4da6ff", away_color="#ff8c42"):
+    """Canvas that plays a multi-match tracking broadcast (from
+    metrica.build_broadcast): both games, switching client-side per the
+    schedule, with play-by-play captions. Self-contained — no Streamlit
+    reruns needed during playback."""
+    import json
+    games = [{
+        "label": gd["label"],
+        "captions": gd["captions"],
+        "frames": [{"t": fr.t, "b": list(fr.ball) if fr.ball else None,
+                    "h": [list(p) for p in fr.home], "a": [list(p) for p in fr.away]}
+                   for fr in gd["frames"]],
+    } for gd in bdata["games"]]
+    data = {"games": games, "schedule": bdata["schedule"], "speed": speed,
+            "home_color": home_color, "away_color": away_color}
+    return _BROADCAST_TEMPLATE.replace("__DATA__", json.dumps(data))
+
+
 def build_tracking_feed(frames, home="Home", away="Away", label="Tracking feed",
                         speed=1.0, caption="", home_color="#4da6ff",
                         away_color="#ff8c42"):
