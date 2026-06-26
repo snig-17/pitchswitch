@@ -2,7 +2,7 @@
 
 > Like NFL RedZone, but for soccer, and it switches you *before* the goal instead of after.
 
-**▶ Live demo: https://pitchswitch-g5cvhbdq89gvdfxmb4awmn.streamlit.app** — pick a favourite team, hit Start Demo, and tap "🔊 commentary" to hear the AI call the switches.
+**▶ [Live demo](https://pitchswitch-g5cvhbdq89gvdfxmb4awmn.streamlit.app)** — pick a favourite team and hit Start. Watch the Director cut to whichever match is heating up and *show you why* (the live danger differential on screen), with IBM Granite calling each switch out loud. Tap "🔊 commentary" for the spoken call.
 
 ## The Problem
 
@@ -128,30 +128,38 @@ Select your favourite team(s), including small nations that broadcasters ignore.
 
 ## Quick Start
 
-No install needed to try it — use the **[live demo](https://pitchswitch-g5cvhbdq89gvdfxmb4awmn.streamlit.app)**. To run locally (and generate fresh AI narration via your own Granite):
+No install needed to try it — open the **[live demo](https://pitchswitch-g5cvhbdq89gvdfxmb4awmn.streamlit.app)**.
+
+### Run it locally (30 seconds)
+
+The broadcast cache is committed to the repo, so the demo runs with nothing but the
+runtime deps — **no data download, no Ollama, no API keys.**
 
 ```bash
-# 1. Clone and install
 git clone https://github.com/snig-17/pitchswitch.git
 cd pitchswitch
-pip install -r requirements.txt        # runtime (serves the pre-built cache)
-# pip install -r requirements-dev.txt  # to rebuild the cache / run calibration
-
-# 2. Download the open tracking data (Metrica sample games, ~120MB, gitignored)
-bash scripts/get_metrica.sh
-
-# 3. Configure providers (optional)
-cp .env.example .env
-# Local IBM Granite via Ollama works out of the box:
-#   ollama pull granite3.3:2b
-# Optional: add IBM Watson Text to Speech credentials in .env for spoken commentary.
-
-# 4. Run
-streamlit run app.py
+pip install -r requirements.txt
+streamlit run app.py        # pick a team, hit Start — it serves the pre-built cache
 ```
 
-First Start builds the broadcast (~30–40s with local Granite) and caches it, so
-subsequent Starts load in ~1s.
+### Rebuild the cache / reproduce the accuracy numbers (optional)
+
+Only needed to regenerate broadcasts with fresh Granite narration, or to re-run the
+accuracy calibration. This is the heavier path (ML deps, tracking data, local LLM):
+
+```bash
+pip install -r requirements-dev.txt        # statsbombpy, docling, numpy, mplsoccer
+bash scripts/get_metrica.sh                # Metrica tracking data (~120MB, gitignored)
+cp .env.example .env                       # configure providers
+ollama pull granite3.3:2b                  # local IBM Granite for narration
+# optional: add IBM Watson Text to Speech creds in .env for spoken commentary
+
+python scripts/prebuild_cache.py           # rebuild the broadcast cache
+python scripts/calibrate.py                # reproduce the Model Accuracy table above
+```
+
+A rebuild runs Granite (~30–40s per favourite team) and caches the result, so the
+app then loads each broadcast in ~1s.
 
 ## Future Work
 
@@ -169,3 +177,7 @@ subsequent Starts load in ~1s.
 - **StatsBomb** open data (event data: anticipation model + accuracy calibration)
 - **mplsoccer / Streamlit / HTML5 canvas** (the live feed + UI)
 - **Claude Code** (development tool)
+
+## License
+
+MIT — see [LICENSE](LICENSE). Third-party open data (StatsBomb, Metrica Sports) is under its own respective terms.
