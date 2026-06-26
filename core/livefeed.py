@@ -255,6 +255,9 @@ function avatar(x,y,shirt,num,numCol){
 function lerp(a,b,f){return a+(b-a)*f;}
 function onAir(at){ let gi=0,st=START; for(const s of SCHED){ if(s[0]<=at){gi=s[1];st=s[0];} else break; } return [gi,st]; }
 function caption(game, at){ let c=''; for(const e of game.captions){ if(e[0]<=at) c=e[1]; else break; } return c; }
+function dangerAt(game, at){ const A=game.danger; if(!A||!A.length) return 0;
+  const Fr=game.frames; let j=0; while(j<Fr.length-1 && Fr[j+1].t<=at) j++;
+  return A[Math.min(j,A.length-1)]||0; }
 
 function draw(now){
   let at = START + (now-t0)/1000 * D.speed;
@@ -286,15 +289,45 @@ function draw(now){
   ctx.fillStyle=g.hc; ctx.fillText('\\u25cf '+g.home, 16, H-44);
   ctx.fillStyle=g.ac; ctx.fillText('\\u25cf '+g.away, 26+ctx.measureText('\\u25cf '+g.home).width+18, H-44);
 
-  // switch banner (brief, after a cut) — wraps long Granite narration
-  if (at - switchT < 4.0 && reason){
+  // Director danger comparison (top-right): one bar per match so the viewer
+  // sees the matches competing for the cut in real time. This is the "why"
+  // behind every switch, made visible.
+  const NG=D.games.length, PANW=236, PANX=W-PANW-12, PANY=12, ROWH=27;
+  ctx.fillStyle='rgba(8,20,12,0.82)'; ctx.fillRect(PANX,PANY,PANW,20+NG*ROWH);
+  ctx.fillStyle='#9fdcae'; ctx.font='bold 10px sans-serif';
+  ctx.fillText('DIRECTOR \\u2014 LIVE DANGER', PANX+8, PANY+13);
+  for(let gj=0; gj<NG; gj++){
+    const gg=D.games[gj], dv=dangerAt(gg,at), onair=(gj===gi), ry=PANY+20+gj*ROWH;
+    ctx.fillStyle=onair?'#fff':'#9fb0c4'; ctx.font=(onair?'bold ':'')+'11px sans-serif';
+    const lbl=gg.home+' v '+gg.away;
+    ctx.fillText(lbl.length>22?lbl.slice(0,21)+'\\u2026':lbl, PANX+8, ry+8);
+    if(onair){ ctx.fillStyle='#ffd400'; ctx.font='bold 9px sans-serif'; ctx.textAlign='right';
+      ctx.fillText('\\u25b6 ON AIR', PANX+PANW-8, ry+8); ctx.textAlign='left'; }
+    const barX=PANX+8, barY=ry+12, barW=PANW-16, barH=7;
+    ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fillRect(barX,barY,barW,barH);
+    ctx.fillStyle=dv>0.5?'#ff3b3b':(dv>0.3?'#ffcc00':'#4da6ff');
+    ctx.fillRect(barX,barY,barW*Math.min(dv,1),barH);
+  }
+
+  // switch banner (brief, after a cut) — wraps long Granite narration, then
+  // shows the danger differential that drove the Director's decision.
+  if (at - switchT < 4.5 && reason){
     ctx.font='bold 15px sans-serif';
     const words=reason.split(' '); let lines=[], ln='';
     for(const w of words){ if(ctx.measureText(ln+' '+w).width>W-32){lines.push(ln);ln=w;} else ln=(ln?ln+' '+w:w);} if(ln)lines.push(ln);
     lines=lines.slice(0,2);
-    ctx.fillStyle='rgba(255,59,59,0.88)'; ctx.fillRect(0,58,W,14+lines.length*20);
-    ctx.fillStyle='#fff';
+    const showWhy = switchT > START + 0.5;     // skip on kick-off
+    let dOn=0, dOther=0;
+    if(showWhy){ dOn=dangerAt(g,switchT);
+      for(let gj=0;gj<NG;gj++){ if(gj!==gi) dOther=Math.max(dOther,dangerAt(D.games[gj],switchT)); } }
+    const delta=Math.max(0,dOn-dOther);
+    const bh=14+lines.length*20+(showWhy?20:0);
+    ctx.fillStyle='rgba(255,59,59,0.88)'; ctx.fillRect(0,58,W,bh);
+    ctx.fillStyle='#fff'; ctx.font='bold 15px sans-serif';
     lines.forEach((l,li)=>ctx.fillText((li?'   ':'\\u25b6 ')+l, 16, 78+li*20));
+    if(showWhy){ ctx.fillStyle='#ffe08a'; ctx.font='bold 12px sans-serif';
+      ctx.fillText('\\u25b2 WHY: danger '+dOn.toFixed(2)+'  (+'+delta.toFixed(2)+' vs the other match)',
+                   16, 80+lines.length*20); }
   }
 
   // play-by-play caption (lower third)
@@ -368,6 +401,7 @@ def build_broadcast(bdata, speed=1.4, home_color="#4da6ff", away_color="#ff8c42"
         "ac": gd.get("away_color", "#ff8c42"), "an": gd.get("away_num", "#111"),
         "narration": gd.get("narration", ""), "audio": gd.get("audio"),
         "coach": gd.get("coach", []),
+        "danger": [round(d, 3) for d in gd.get("danger", [])],
         "captions": gd["captions"],
         "frames": [{"t": fr.t, "b": list(fr.ball) if fr.ball else None,
                     "h": [list(p) if p else None for p in fr.home],
