@@ -18,7 +18,7 @@ PitchSwitch watches every match at once and tries to get you to the action *befo
 
 It gives each match a live danger score from the play-by-play data, things like balls carried into the final third, pressure in the box, shots, corners and penalties. The key signal is how fast that danger is rising, which is what catches a game about to boil over instead of one that already has. On the test matches it flagged goals with about 70 seconds of warning on average.
 
-When two matches heat up at the same time and the call isn't obvious, IBM Granite reads the full state of all of them, decides where to send you, and explains it in a line a TV presenter would actually say. Those lines are grounded in real team context parsed with IBM Docling, so the narration knows Son drives Korea's press and Mbappe is France's outlet, not just the score.
+The Director cuts to whichever match's danger is pulling ahead — and shows you *why*: an on-screen danger bar for each match and the differential that triggered the cut. IBM Granite calls each switch in a line a TV presenter would actually say, grounded in real team context parsed with IBM Docling, so the narration knows Son drives Korea's press and Mbappe is France's outlet, not just the score.
 
 You can name your teams too, including the small nations broadcasters ignore, and it leans the switching toward them.
 
@@ -73,9 +73,9 @@ The **forward-looking signal** is the time-based derivative: how fast danger is 
 
 ### IBM Granite Integration
 
-IBM Granite serves as the reasoning engine for ambiguous switching decisions. When two or more matches are close in danger (within 0.15), Granite evaluates the structured match state and decides which match deserves the viewer's attention, generating a natural-language narration: "Switch to Brazil-Croatia, penalty about to be taken after VAR review."
+In the live broadcast, the switch itself is decided deterministically by the danger differential (the thing you see on screen), so a cut is never blocked on LLM latency. IBM Granite's job is the *call*: for each switch it generates the natural-language narration a presenter would say — "Switch to Brazil-Croatia, penalty about to be taken after VAR review." — and it powers Coach's rule explanations. Both are grounded by Docling.
 
-For clear winners (one match far above the others), a heuristic handles the switch instantly. Granite narration arrives asynchronously so the switch is never delayed by LLM latency.
+The repo also ships an event-model Director (`core/director.py`) that uses Granite as a tie-break reasoner when two matches are within 0.15 danger of each other. That path drives the StatsBomb anticipation model used in the offline calibration below; the live tracking feed uses the deterministic differential so the broadcast stays real-time.
 
 ### Docling Grounding
 
@@ -97,7 +97,7 @@ Measured across the three demo matches (15 goals) with `scripts/calibrate.py`, u
 
 ### Methodology
 
-`python scripts/calibrate.py [--window SECONDS]` replays each match through the heat model and scores the switch signal:
+`python scripts/calibrate.py [--window SECONDS]` replays each match through the heat model and scores the switch signal (needs `pip install -r requirements-dev.txt`; StatsBomb's open data is fetched via `statsbombpy` on first run and cached locally):
 
 - **Ground truth** = goals; shots (goals + attempts) form the broader "dangerous moment" set used for false-positive scoring, since anticipating a shot or save is also a valid switch.
 - **Predicted (recall)**: a goal is predicted if a switch fired for that match in the window *strictly before* the goal — measuring anticipation, not reaction to the goal's own xG spike.

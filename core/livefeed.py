@@ -390,9 +390,9 @@ def build_audio_player(mp3_bytes: bytes) -> str:
 
 def build_broadcast(bdata, speed=1.4, home_color="#4da6ff", away_color="#ff8c42"):
     """Canvas that plays a multi-match tracking broadcast (from
-    metrica.build_broadcast): both games, switching client-side per the
-    schedule, with play-by-play captions. Self-contained — no Streamlit
-    reruns needed during playback."""
+    metrica.build_unified_broadcast): both games, switching client-side per the
+    schedule, with the live-danger panel, Granite narration, Coach, and
+    play-by-play captions. Self-contained — no Streamlit reruns during playback."""
     import json
     games = [{
         "label": gd["label"],

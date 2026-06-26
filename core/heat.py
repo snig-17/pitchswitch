@@ -91,7 +91,6 @@ class MatchHeat:
 
     # Rolling window
     _events: list[DangerEvent] = field(default_factory=list)
-    _prev_danger: float = 0.0
     _prev_time: float = 0.0
     _last_switch_time: float = 0.0
 
@@ -135,15 +134,16 @@ class MatchHeat:
         if self._is_late_game():
             raw_danger = min(raw_danger * LATE_GAME_MULTIPLIER, 1.0)
 
-        # Compute time-based derivative
+        # Compute time-based derivative against the PREVIOUS event's danger.
+        # self.danger still holds the prior value here — it's updated just below —
+        # so this is (danger_now - danger_prev) / elapsed, a true one-step slope.
         elapsed = now - self._prev_time if self._prev_time > 0 else 1.0
         elapsed = max(elapsed, 0.1)  # guard against zero
-        if len(self._events) >= MIN_DERIVATIVE_EVENTS and elapsed > 0:
-            self.derivative = (raw_danger - self._prev_danger) / elapsed
+        if len(self._events) >= MIN_DERIVATIVE_EVENTS:
+            self.derivative = (raw_danger - self.danger) / elapsed
         else:
             self.derivative = 0.0
 
-        self._prev_danger = self.danger
         self._prev_time = now
         self.danger = raw_danger
 

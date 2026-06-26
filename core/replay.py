@@ -20,7 +20,6 @@ from statsbombpy import sb
 
 
 # StatsBomb pitch is 120x80 yards
-PITCH_LENGTH = 120
 FINAL_THIRD_X = 80  # x > 80 = final third
 
 
@@ -296,35 +295,6 @@ async def replay_match(
 
         # Notify
         await event_callback(event, state)
-
-
-async def replay_concurrent(
-    match_configs: list[tuple[int, str]],  # [(match_id, "optional label"), ...]
-    speed_factor: float = 60.0,
-    event_callback=None,
-) -> None:
-    """Replay multiple matches concurrently on a shared virtual clock.
-
-    Each match runs as its own async coroutine. Events from all matches
-    interleave naturally based on their match timestamps.
-    """
-    if event_callback is None:
-        async def event_callback(event, state):
-            pass
-
-    print(f"Loading {len(match_configs)} matches...")
-    matches = []
-    for match_id, *_ in match_configs:
-        events, info = load_match(match_id)
-        matches.append((events, info))
-
-    print(f"Starting concurrent replay at {speed_factor}x speed...")
-    tasks = [
-        replay_match(events, info, speed_factor, event_callback)
-        for events, info in matches
-    ]
-    await asyncio.gather(*tasks)
-    print("Replay complete.")
 
 
 # --- Demo preset matches ---

@@ -269,34 +269,3 @@ def build_unified_broadcast(matchups, favourite: str = "", t0: float = 0.0,
             schedule.append([round(t, 1), on])
         prev_diff = diff
     return {"games": games, "schedule": schedule}
-
-
-def build_broadcast(games=(1, 2), t0: float = 0.0, dur: float = 180.0,
-                    fps: int = 10, dwell: float = 4.0):
-    """Assemble a multi-match broadcast: frames + danger + a switch schedule +
-    play-by-play captions, ready to hand to the canvas. Switching is greedy on
-    the danger proxy with a dwell guard."""
-    gdata = []
-    for g in games:
-        frames = load_frames(g, t0=t0, dur=dur, fps=fps)
-        dser = [frame_danger(f) for f in frames]
-        gdata.append({"label": f"MATCH {len(gdata)+1}", "frames": frames,
-                      "danger": dser, "captions": load_events(g, t0, dur)})
-
-    # Common time grid = the shorter game's frame times
-    times = [f.t for f in min((gd["frames"] for gd in gdata), key=len)]
-    on = 0
-    last_switch = -1e9
-    schedule = [[times[0] if times else t0, 0, "KICK OFF"]]
-    for k, t in enumerate(times):
-        best, bestd = on, -1.0
-        for gi, gd in enumerate(gdata):
-            d = gd["danger"][k] if k < len(gd["danger"]) else 0.0
-            if d > bestd:
-                best, bestd = gi, d
-        cur = gdata[on]["danger"][k] if k < len(gdata[on]["danger"]) else 0.0
-        if best != on and t - last_switch > dwell and bestd > cur + 0.12 and bestd > 0.25:
-            on = best
-            last_switch = t
-            schedule.append([round(t, 1), on, "Danger building — cut to MATCH " + str(on + 1)])
-    return {"games": gdata, "schedule": schedule}
