@@ -9,3 +9,4 @@ venv/
 *.egg
 .pytest_cache/
 data/*.json
+.gstack/

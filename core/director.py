@@ -183,11 +183,12 @@ class Director:
     def _maybe_start_granite(self, top_matches: list) -> None:
         """Kick off a background Granite decision for ambiguous matches.
 
-        Non-blocking: respects availability, the cooldown, and an in-flight
-        guard so we never spawn overlapping LLM calls. The result lands in
-        _pending_decision for the next call to get_pending_decision().
+        Non-blocking: respects availability, warmth, the cooldown, and an
+        in-flight guard so we never spawn overlapping LLM calls. The result
+        lands in _pending_decision for the next call to get_pending_decision().
         """
-        if self._granite_inflight or not self._is_llm_available():
+        if (self._granite_inflight or not self._is_llm_available()
+                or not self.provider.is_warm()):
             return
 
         # Cooldown check (in match-seconds)
@@ -211,7 +212,8 @@ class Director:
             response = self.provider.generate(prompt, max_tokens=150)
 
             if not response:
-                self._llm_available = False  # mark as down
+                # Transient (timeout / model busy). Don't permanently disable
+                # Granite — a single slow call shouldn't kill it for the session.
                 return
 
             # Parse: Granite should name which match to watch
@@ -276,7 +278,7 @@ class Director:
 
     def _request_granite_narration(self, heat: MatchHeat) -> None:
         """Fire async Granite narration (non-blocking)."""
-        if not self._is_llm_available():
+        if not self._is_llm_available() or not self.provider.is_warm():
             return
 
         def _generate():

@@ -42,6 +42,9 @@ if "running" not in st.session_state:
     st.session_state.tick = 0
     st.session_state.director = None
     st.session_state.last_source = ""  # how the last switch was decided
+    st.session_state.force_showdown = False  # demo: trigger ambiguous Granite call
+    st.session_state.showdown_mids = None    # the two matches pinned into a tie
+    st.session_state.showdown_ttl = 0        # ticks remaining to hold the tie
 
 # ---------------------------------------------------------------------------
 # Sidebar
@@ -61,6 +64,21 @@ with st.sidebar:
     with col_b:
         stop = st.button("Stop", disabled=not st.session_state.running,
                           use_container_width=True)
+
+    # Demo control: force a neck-and-neck moment so the Granite reasoning
+    # tier (ambiguous calls) reliably fires on stage.
+    if st.button("Force Granite Showdown", disabled=not st.session_state.running,
+                  use_container_width=True,
+                  help="Pin two matches into a near-tie so Granite has to "
+                       "reason about which one to show."):
+        st.session_state.force_showdown = True
+
+    # Granite readiness (the showdown only reasons once the model is warm)
+    if st.session_state.director is not None:
+        if st.session_state.director.provider.is_warm():
+            st.caption("Granite: ready")
+        else:
+            st.caption("Granite: warming up...")
 
     if st.session_state.switch_log:
         st.divider()
@@ -164,6 +182,56 @@ def process_tick():
     if director is not None:
         director.favourite_team = fav  # keep in sync if user edits mid-run
 
+        # --- Demo: forced Granite showdown -------------------------------
+        # Set up a near-tie between two matches so the Director's ambiguous
+        # (Granite) tier fires. We avoid the favourite team so the danger
+        # bias can't break the tie past AMBIGUITY_THRESHOLD.
+        if st.session_state.force_showdown:
+            st.session_state.force_showdown = False
+            fav_l = fav.strip().lower()
+
+            def _is_fav(h):
+                return bool(fav_l) and (fav_l in h.home_team.lower() or
+                                         fav_l in h.away_team.lower())
+
+            active = [info.match_id for events, info in st.session_state.match_data
+                      if st.session_state.event_idx[info.match_id] < len(events)]
+            # Prefer two active, non-favourite matches; fall back as needed.
+            pool = [m for m in active if not _is_fav(st.session_state.heats[m])]
+            if len(pool) < 2:
+                pool = active or list(st.session_state.heats)
+            chosen = pool[:2]
+            if len(chosen) == 2:
+                st.session_state.showdown_mids = tuple(chosen)
+                # Hold long enough that the async Granite re-pick (a few
+                # seconds out) lands well inside the window and stays visible.
+                st.session_state.showdown_ttl = 40
+                # Start the viewer on a different match so a switch is visible.
+                others = [m for m in st.session_state.heats if m not in chosen]
+                if others:
+                    st.session_state.current_match = others[0]
+                    director.current_match_id = others[0]
+                # Bypass the Granite cooldown for the demo.
+                director._last_granite_time = -1e9
+                director._granite_inflight = False
+
+        # Hold the near-tie for a few ticks so the async Granite re-pick has
+        # consistent state to read and time to land in the UI.
+        if st.session_state.showdown_ttl > 0 and st.session_state.showdown_mids:
+            a, b = st.session_state.showdown_mids
+            ha, hb = st.session_state.heats[a], st.session_state.heats[b]
+            ha.danger, ha.should_switch, ha.about_to_ignite = 0.66, True, True
+            ha.switch_reason = "Danger critical - end-to-end action"
+            hb.danger, hb.should_switch, hb.about_to_ignite = 0.58, True, True
+            hb.switch_reason = "Danger critical - late surge"
+            # Damp every other match (incl. a biased favourite) so the pinned
+            # pair is unambiguously the top two and the tie can't be broken.
+            for omid, oheat in st.session_state.heats.items():
+                if omid not in (a, b):
+                    oheat.danger = min(oheat.danger, 0.20)
+                    oheat.should_switch = False
+            st.session_state.showdown_ttl -= 1
+
         def _apply(decision, *, force_log: bool):
             """Apply a SwitchDecision to the UI state."""
             target_heat = st.session_state.heats[decision.target_match_id]
@@ -226,6 +294,17 @@ elif "complete" in st.session_state.narration.lower():
     st.success(st.session_state.narration)
 else:
     st.info(st.session_state.narration)
+
+# How the last switch was decided
+_SOURCE_BADGE = {
+    "granite": "Granite reasoned this switch (ambiguous call)",
+    "heuristic": "Heuristic switch (clear winner)",
+    "penalty": "Penalty - instant switch",
+    "fallback": "Template fallback (LLM unavailable)",
+}
+if st.session_state.last_source:
+    st.caption(_SOURCE_BADGE.get(st.session_state.last_source,
+                                  st.session_state.last_source))
 
 # ---------------------------------------------------------------------------
 # Danger Ticker Strip

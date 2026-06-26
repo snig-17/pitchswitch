@@ -41,6 +41,12 @@ class LLMProvider(ABC):
         """
         return None
 
+    def is_warm(self) -> bool:
+        """Whether the model is loaded and ready for fast generation.
+        Cloud providers are always warm; local model servers override this.
+        """
+        return True
+
 
 class OllamaProvider(LLMProvider):
     # Generation timeout. Cold model loads are handled by warmup(), so once
@@ -52,6 +58,7 @@ class OllamaProvider(LLMProvider):
     def __init__(self):
         self.base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         self.model = os.getenv("OLLAMA_MODEL", "granite3.1-dense")
+        self._warm = False  # set once the model is loaded and responding
 
     def generate(self, prompt: str, max_tokens: int = 256) -> str:
         try:
@@ -62,21 +69,29 @@ class OllamaProvider(LLMProvider):
                 timeout=self.GEN_TIMEOUT,
             )
             resp.raise_for_status()
-            return resp.json().get("response", "")
+            text = resp.json().get("response", "")
+            if text:
+                self._warm = True
+            return text
         except Exception:
             return ""
 
     def warmup(self) -> None:
         """Load the model into memory with a tiny throwaway generation."""
         try:
-            requests.post(
+            resp = requests.post(
                 f"{self.base_url}/api/generate",
                 json={"model": self.model, "prompt": "hi", "stream": False,
                       "options": {"num_predict": 1}},
                 timeout=self.WARMUP_TIMEOUT,
             )
+            resp.raise_for_status()
+            self._warm = True
         except Exception:
             pass
+
+    def is_warm(self) -> bool:
+        return self._warm
 
     def is_available(self) -> bool:
         try:
