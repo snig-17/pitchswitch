@@ -343,6 +343,17 @@ if st.session_state.matches_loaded:
         is_current = (mid == st.session_state.current_match)
         score = st.session_state.scores.get(mid, "0-0")
 
+        # Show the danger the Director ranks on (favourite bias applied), so
+        # the ticker matches the switching decisions.
+        director = st.session_state.director
+        if director is not None:
+            danger = director.biased_danger(heat)
+            is_fav = director.is_favourite(heat)
+        else:
+            danger = heat.danger
+            is_fav = False
+        fav_tag = " *" if is_fav and danger != heat.danger else ""
+
         with cols[i]:
             # Highlight current match
             if is_current:
@@ -353,18 +364,22 @@ if st.session_state.matches_loaded:
             st.metric(
                 label=f"{heat.current_minute}'",
                 value=score,
-                delta=f"Danger: {heat.danger:.2f}" if heat.danger > 0.3 else None,
+                delta=f"Danger: {danger:.2f}{fav_tag}" if danger > 0.3 else None,
             )
 
             # Danger bar with color coding
-            bar_color = "normal"
-            progress_val = min(heat.danger, 1.0)
+            progress_val = min(danger, 1.0)
             if heat.about_to_ignite:
-                st.progress(progress_val, text=f"BUILDING {heat.danger:.2f}")
-            elif heat.danger > 0.5:
-                st.progress(progress_val, text=f"HIGH {heat.danger:.2f}")
+                st.progress(progress_val, text=f"BUILDING {danger:.2f}{fav_tag}")
+            elif danger > 0.5:
+                st.progress(progress_val, text=f"HIGH {danger:.2f}{fav_tag}")
             else:
-                st.progress(progress_val, text=f"{heat.danger:.2f}")
+                st.progress(progress_val, text=f"{danger:.2f}{fav_tag}")
+
+    director = st.session_state.director
+    if director is not None and director.favourite_team:
+        st.caption(f"\\* danger boosted {director.fav_bias:g}x for your team "
+                    f"({director.favourite_team})")
 
     st.divider()
 

@@ -145,6 +145,18 @@ class Director:
                 return narr
         return None
 
+    def biased_danger(self, heat: MatchHeat) -> float:
+        """Public: the danger the Director actually ranks on (favourite bias
+        applied). Use this for display so the UI matches switching decisions."""
+        return self._apply_bias(heat)
+
+    def is_favourite(self, heat: MatchHeat) -> bool:
+        """Whether this match involves the viewer's favourite team."""
+        if not self.favourite_team:
+            return False
+        fav = self.favourite_team.strip().lower()
+        return fav in heat.home_team.lower() or fav in heat.away_team.lower()
+
     def _apply_bias(self, heat: MatchHeat) -> float:
         """Apply favourite team bias to danger score."""
         if not self.favourite_team:
