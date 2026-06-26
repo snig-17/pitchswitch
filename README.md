@@ -182,6 +182,10 @@ app then loads each broadcast in ~1s.
 
 `pytest` runs the unit suite over the live path (danger model, switching bias, Coach, and a heat-model regression) — green in CI on every push. See [TESTING.md](TESTING.md).
 
+## Architecture
+
+The two-engine design (calibrated StatsBomb model vs the live tracking feed), data flow, and where the IBM tech sits is explained in [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Design
 
 The visual language (broadcast control-room theme, tokens, type, component vocabulary) is documented in [DESIGN.md](DESIGN.md).
