@@ -15,6 +15,14 @@ from __future__ import annotations
 
 import json
 
+
+def _safe_embed(data) -> str:
+    """JSON for embedding inside an HTML <script> block. json.dumps leaves
+    '<' intact, so a "</script>" in any string (Granite narration, Coach text,
+    captions) would break out of the script tag. Escaping '<' and '>' as \\u
+    sequences keeps it valid JS while making script-context breakout impossible."""
+    return json.dumps(data).replace("<", "\\u003c").replace(">", "\\u003e")
+
 # StatsBomb pitch is 120 x 80
 _TEMPLATE = """
 <div style="background:#0d1f12;border-radius:8px;padding:6px">
@@ -410,7 +418,7 @@ def build_broadcast(bdata, speed=1.4, home_color="#4da6ff", away_color="#ff8c42"
     } for gd in bdata["games"]]
     data = {"games": games, "schedule": bdata["schedule"], "speed": speed,
             "home_color": home_color, "away_color": away_color}
-    return _BROADCAST_TEMPLATE.replace("__DATA__", json.dumps(data))
+    return _BROADCAST_TEMPLATE.replace("__DATA__", _safe_embed(data))
 
 
 def build_tracking_feed(frames, home="Home", away="Away", label="Tracking feed",
