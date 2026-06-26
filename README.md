@@ -18,28 +18,40 @@ It gives each match a live danger score from the play-by-play data, things like 
 
 When two matches heat up at the same time and the call isn't obvious, IBM Granite reads the full state of all of them, decides where to send you, and explains it in a line a TV presenter would actually say. Those lines are grounded in real team context parsed with IBM Docling, so the narration knows Son drives Korea's press and Mbappe is France's outlet, not just the score.
 
-You can name your teams too, including the small nations broadcasters ignore, and it leans the switching toward them. The main screen is a live tactical view of whatever match you've been cut to, and it jumps between games the way a director in a control room would.
+You can name your teams too, including the small nations broadcasters ignore, and it leans the switching toward them.
+
+The main screen is **one live feed over real player tracking** (25fps, all 22 players, from Metrica's open data). The Director cuts between matches when one's danger pulls ahead, and Granite calls each switch out loud — spoken in a British commentator voice via **IBM Watson Text to Speech**. It plays like a real broadcast control room, not a dashboard.
 
 ## Technical Approach
 
 ```
-statsbombpy (World Cup event data)
+Metrica tracking (25fps, 22 players + ball)      StatsBomb events (anticipation model + calibration)
+        |                                                |
+  metrica.py     per-frame danger + differential        heat.py    rolling danger + rising-danger derivative
+        |         switch schedule                        director.py + grounding.py + personalize.py
+        |                                                (Granite reasoning, Docling primers, team bias)
+        v                                                        |
+  build_unified_broadcast  <-- Granite/Docling narration + favourite bias --+
         |
-  replay.py        asyncio virtual clock, concurrent matches
+  livefeed.py    self-contained HTML5 canvas: 22 avatars glide, the Director
+        |        cuts between matches, narration banner + spoken commentary
         |
-  heat.py          rolling 90s danger score + rising-danger derivative
+  providers/tts.py   IBM Watson Text to Speech (spoken switch calls)
         |
-  director.py      heuristic switch + IBM Granite reasoning on close calls
-        |        \
-        |         grounding.py   IBM Docling parses team primers -> KB
-        |         personalize.py multi-team + small-nation bias
-        |
-  pitchcam.py      mplsoccer live tactical feed
-        |
-  app.py           Streamlit UI: broadcast feed, danger ticker, accuracy
+  app.py             Streamlit: one unified broadcast feed (cached for fast start)
 ```
 
-LLM provider is swappable (`providers/llm.py`): Granite runs locally via Ollama, or on IBM watsonx.ai / Replicate in the cloud.
+Three IBM technologies: **Granite** (switch reasoning + narration), **Docling**
+(team-primer grounding), **Watson Text to Speech** (spoken commentary). The LLM
+provider is swappable (`providers/llm.py`): Granite runs locally via Ollama, or
+on IBM watsonx.ai / Replicate in the cloud.
+
+The live feed uses Metrica's open tracking (real continuous movement, anonymised
+teams) mapped to World Cup fixtures so Granite/Docling/personalization apply —
+the team labels are illustrative, a representative stand-in for a licensed
+broadcast feed (FIFA blocks real match video from embedding). The StatsBomb
+pipeline (`heat.py`, `scripts/calibrate.py`) backs the anticipation model and
+the accuracy numbers below.
 
 ### How the Anticipation Model Works
 
@@ -103,7 +115,7 @@ Select your favourite team(s), including small nations that broadcasters ignore.
 
 | Criterion | Feature | Evidence |
 |-----------|---------|----------|
-| **Technical Execution** | Anticipation model + Granite reasoning + Docling RAG | Rolling danger score with forward-looking derivative; Granite reasons over structured state; Docling grounds narration |
+| **Technical Execution** | Anticipation model + 3 IBM techs + real tracking feed | Rolling danger score with forward-looking derivative; Granite reasons over structured state, Docling grounds the narration, Watson TTS speaks it; live 25fps tracking broadcast |
 | **Innovation** | Multi-match anticipation + small-nation personalization | Uncontested: no tool predicts and switches pre-event; small-nation bias is unique |
 | **Challenge Fit** | "AI Inside the Match" + World Cup specific | Dead-on theme; structurally WC-specific (simultaneous group-stage games) |
 | **Implementation & Feasibility** | Free data, swappable LLM, clear product path | StatsBomb free data; provider interface for watsonx/Replicate/Ollama; 10x = broadcast control room API |
@@ -116,13 +128,21 @@ git clone https://github.com/snig-17/pitchswitch.git
 cd pitchswitch
 pip install -r requirements.txt
 
-# 2. Configure LLM provider
-cp .env.example .env
-# Edit .env with your provider credentials
+# 2. Download the open tracking data (Metrica sample games, ~120MB, gitignored)
+bash scripts/get_metrica.sh
 
-# 3. Run
+# 3. Configure providers (optional)
+cp .env.example .env
+# Local IBM Granite via Ollama works out of the box:
+#   ollama pull granite3.3:2b
+# Optional: add IBM Watson Text to Speech credentials in .env for spoken commentary.
+
+# 4. Run
 streamlit run app.py
 ```
+
+First Start builds the broadcast (~30–40s with local Granite) and caches it, so
+subsequent Starts load in ~1s.
 
 ## Future Work
 
@@ -133,8 +153,10 @@ streamlit run app.py
 
 ## Built With
 
-- **IBM Granite** (core AI reasoning + narration)
-- **IBM Docling** (document parsing for team primers)
-- **StatsBomb** open data (real World Cup match events)
-- **Streamlit** (dashboard UI)
+- **IBM Granite** (switch reasoning + narration)
+- **IBM Docling** (team-primer grounding)
+- **IBM Watson Text to Speech** (spoken commentary)
+- **Metrica Sports** open data (25fps player tracking)
+- **StatsBomb** open data (event data: anticipation model + accuracy calibration)
+- **mplsoccer / Streamlit / HTML5 canvas** (the live feed + UI)
 - **Claude Code** (development tool)
