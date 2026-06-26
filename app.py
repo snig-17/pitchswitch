@@ -77,10 +77,16 @@ with st.sidebar:
 
     # Granite readiness (the showdown only reasons once the model is warm)
     if st.session_state.director is not None:
-        if st.session_state.director.provider.is_warm():
+        director = st.session_state.director
+        if director.provider.is_warm():
             st.caption("Granite: ready")
         else:
             st.caption("Granite: warming up...")
+        if director.grounding.loaded:
+            src = "Docling" if director.grounding.used_docling else "markdown"
+            st.caption(f"Primers: {len(director.grounding.kb)} nations ({src})")
+        else:
+            st.caption("Primers: loading...")
 
     if st.session_state.switch_log:
         st.divider()
@@ -113,6 +119,7 @@ if start and not st.session_state.running:
         st.session_state.director = create_director(favourite_team=favourite_team)
         st.session_state.director.current_match_id = st.session_state.current_match
         st.session_state.director.warmup()  # pre-load the LLM in the background
+        st.session_state.director.load_grounding()  # parse primers (Docling)
         st.session_state.matches_loaded = True
         st.session_state.running = True
         st.session_state.switch_count = 0

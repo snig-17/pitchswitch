@@ -18,6 +18,7 @@ import threading
 from dataclasses import dataclass, field
 
 from core.heat import MatchHeat
+from core.grounding import Grounding, get_grounding
 from core.personalize import Personalizer
 from providers.llm import LLMProvider, get_provider
 
@@ -50,6 +51,7 @@ class Director:
     """Orchestrates multi-match switching decisions."""
     provider: LLMProvider = field(default_factory=get_provider)
     personalizer: Personalizer = field(default_factory=Personalizer)
+    grounding: Grounding = field(default_factory=Grounding)  # primer KB (Docling)
 
     # State
     current_match_id: int | None = None
@@ -192,6 +194,16 @@ class Director:
                 pass
         threading.Thread(target=_warm, daemon=True).start()
 
+    def load_grounding(self) -> None:
+        """Load the primer knowledge base (Docling) in the background so the
+        ~6s parse doesn't block startup. Granite runs ungrounded until ready."""
+        def _load():
+            try:
+                self.grounding = get_grounding()
+            except Exception:
+                pass
+        threading.Thread(target=_load, daemon=True).start()
+
     def _maybe_start_granite(self, top_matches: list) -> None:
         """Kick off a background Granite decision for ambiguous matches.
 
@@ -284,10 +296,15 @@ class Director:
                 lines.append(f"    BUILDING - danger rising fast")
             if context:
                 lines.append(f"    Recent: {'; '.join(context[:2])}")
+            facts = self.grounding.facts_for(heat.home_team, heat.away_team)
+            if facts:
+                for fact in facts.split("\n"):
+                    lines.append(f"    Background: {fact}")
 
         lines.append("")
         lines.append("Which match should we switch to? Reply with ONE sentence, starting with")
-        lines.append("'Switch to [Team A] vs [Team B]' and explain why.")
+        lines.append("'Switch to [Team A] vs [Team B]' and explain why. Use the team")
+        lines.append("background to make it vivid and specific.")
 
         return "\n".join(lines)
 
@@ -327,6 +344,9 @@ class Director:
             prompt += f"Recent action: {'; '.join(context[:3])}\n"
         if heat.switch_reason:
             prompt += f"Reason: {heat.switch_reason}\n"
+        facts = self.grounding.facts_for(heat.home_team, heat.away_team)
+        if facts:
+            prompt += f"Team background:\n{facts}\n"
 
         prompt += (
             "\nWrite ONE punchy sentence a TV presenter would say to switch viewers "

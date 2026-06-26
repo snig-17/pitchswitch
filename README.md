@@ -46,7 +46,9 @@ For clear winners (one match far above the others), a heuristic handles the swit
 
 ### Docling Grounding
 
-Nation-specific primers (team history, key players, tournament context) are parsed via IBM Docling into a local knowledge base, grounding Granite's narration with real context about each team.
+Nation-specific primers (team history, key players, tournament context) in `data/primers/*.md` are parsed via IBM Docling into a local knowledge base (`core/grounding.py`). When the Director builds a Granite prompt, it injects the relevant teams' facts so the narration is grounded in real context: "Switch to South Korea vs Germany - Son Heung-min is leading the Taegeuk Warriors' famous never-say-die press."
+
+Docling is optional: if the package isn't installed the app falls back to reading the markdown primers directly, so grounding works either way. The KB loads in a background thread at startup, so the ~6s parse never blocks the replay.
 
 ## Model Accuracy
 

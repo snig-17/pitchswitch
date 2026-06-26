@@ -6,3 +6,7 @@ matplotlib>=3.7.0
 mplsoccer>=1.4.0
 python-dotenv>=1.0.0
 requests>=2.31.0
+
+# Optional: IBM Docling parses nation primers to ground Granite narration.
+# Heavy (ML deps); the app falls back to plain-markdown parsing if absent.
+docling>=2.0.0
