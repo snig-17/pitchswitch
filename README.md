@@ -178,6 +178,10 @@ app then loads each broadcast in ~1s.
 - **mplsoccer / Streamlit / HTML5 canvas** (the live feed + UI)
 - **Claude Code** (development tool)
 
+## Design
+
+The visual language (broadcast control-room theme, tokens, type, component vocabulary) is documented in [DESIGN.md](DESIGN.md).
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Third-party open data (StatsBomb, Metrica Sports) is under its own respective terms.
