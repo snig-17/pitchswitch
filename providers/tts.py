@@ -16,6 +16,7 @@ Then in .env:
 from __future__ import annotations
 
 import os
+import threading
 
 import requests
 from dotenv import load_dotenv
@@ -61,3 +62,37 @@ def get_tts() -> WatsonTTS:
     if _CACHE is None:
         _CACHE = WatsonTTS()
     return _CACHE
+
+
+# --- Async synthesis (synth takes ~3s; never block the UI thread) -----------
+_audio: dict[str, bytes] = {}     # text -> mp3 bytes
+_inflight: set[str] = set()
+_lock = threading.Lock()
+
+
+def request_speak(text: str) -> None:
+    """Kick off background synthesis for `text` (no-op if done/in-flight)."""
+    if not text:
+        return
+    with _lock:
+        if text in _audio or text in _inflight:
+            return
+        _inflight.add(text)
+
+    def _work():
+        try:
+            data = get_tts().synthesize(text)
+        finally:
+            with _lock:
+                if data:
+                    _audio[text] = data
+                _inflight.discard(text)
+
+    data = None
+    threading.Thread(target=_work, daemon=True).start()
+
+
+def get_audio(text: str) -> bytes | None:
+    """Return cached MP3 bytes for `text` if synthesis has finished."""
+    with _lock:
+        return _audio.get(text)

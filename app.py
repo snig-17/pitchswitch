@@ -16,6 +16,7 @@ from core.heat import create_heat
 from core.director import create_director
 from core.livefeed import build_feed, build_broadcast as broadcast_canvas
 from core.metrica import build_broadcast as assemble_broadcast
+from providers.tts import get_tts, request_speak, get_audio
 
 st.set_page_config(
     page_title="PitchSwitch",
@@ -81,6 +82,12 @@ with st.sidebar:
              "Video feed = real FIFA video (blocked from embedding).")
     video_mode = feed_mode == "Video feed"
     tracking_mode = feed_mode == "Tracking feed"
+
+    commentary = False
+    if get_tts().available():
+        commentary = st.toggle("Spoken commentary (Watson TTS)", value=False,
+                                help="Speaks each switch call in a British "
+                                     "commentator voice via IBM Watson TTS.")
 
     col_a, col_b = st.columns(2)
     with col_a:
@@ -372,6 +379,16 @@ _SOURCE_BADGE = {
 if st.session_state.last_source:
     st.caption(_SOURCE_BADGE.get(st.session_state.last_source,
                                   st.session_state.last_source))
+
+# Spoken commentary: synthesize the current switch call in the background and
+# autoplay it when ready. Tracking mode has its own client-side captions.
+if commentary and not tracking_mode and st.session_state.matches_loaded:
+    line = st.session_state.narration
+    if line and not line.lower().startswith(("waiting", "matches loaded")):
+        request_speak(line)
+        clip = get_audio(line)
+        if clip:
+            st.audio(clip, format="audio/mp3", autoplay=True)
 
 # ---------------------------------------------------------------------------
 # Main View — live broadcast feed (the hero; stays above the fold)
