@@ -278,6 +278,35 @@ if(D.games[0].frames.length) requestAnimationFrame(draw); else pitch();
 """
 
 
+_AUDIO_TEMPLATE = """
+<div style="font-family:sans-serif">
+<audio id="cm" autoplay playsinline>
+  <source src="data:audio/mp3;base64,__B64__" type="audio/mpeg">
+</audio>
+<div id="ov" onclick="go()" style="display:none;cursor:pointer;background:#ff3b3b;
+  color:#fff;padding:8px 12px;border-radius:6px;font-weight:bold;font-size:14px">
+  \\U0001f50a Tap to enable commentary
+</div>
+<div id="ok" style="display:none;color:#8fbf8f;font-size:13px">\\U0001f50a Commentary on</div>
+<script>
+const a=document.getElementById('cm'), ov=document.getElementById('ov'), ok=document.getElementById('ok');
+function go(){ a.muted=false; a.play().then(()=>{ov.style.display='none';ok.style.display='block';})
+  .catch(()=>{ov.style.display='block';}); }
+a.addEventListener('ended',()=>{ok.style.display='none';});
+go();
+</script>
+</div>
+"""
+
+
+def build_audio_player(mp3_bytes: bytes) -> str:
+    """HTML audio player that autoplays where allowed, with a one-tap fallback
+    overlay for browsers that block autoplay (Safari)."""
+    import base64
+    b64 = base64.b64encode(mp3_bytes).decode("ascii")
+    return _AUDIO_TEMPLATE.replace("__B64__", b64)
+
+
 def build_broadcast(bdata, speed=1.4, home_color="#4da6ff", away_color="#ff8c42"):
     """Canvas that plays a multi-match tracking broadcast (from
     metrica.build_broadcast): both games, switching client-side per the

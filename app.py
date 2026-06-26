@@ -14,7 +14,8 @@ import streamlit.components.v1 as components
 from core.replay import load_match, get_demo_matches, FINAL_THIRD_X
 from core.heat import create_heat
 from core.director import create_director
-from core.livefeed import build_feed, build_broadcast as broadcast_canvas
+from core.livefeed import (build_feed, build_broadcast as broadcast_canvas,
+                           build_audio_player)
 from core.metrica import build_broadcast as assemble_broadcast
 from providers.tts import get_tts, request_speak, get_audio
 
@@ -388,7 +389,8 @@ if commentary and not tracking_mode and st.session_state.matches_loaded:
         request_speak(line)
         clip = get_audio(line)
         if clip:
-            st.audio(clip, format="audio/mp3", autoplay=True)
+            # Custom player: autoplays where allowed, one-tap fallback on Safari.
+            components.html(build_audio_player(clip), height=54)
 
 # ---------------------------------------------------------------------------
 # Main View — live broadcast feed (the hero; stays above the fold)
