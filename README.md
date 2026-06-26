@@ -97,7 +97,7 @@ Select your favourite team(s), including small nations that broadcasters ignore.
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/YOUR_USERNAME/pitchswitch.git
+git clone https://github.com/snig-17/pitchswitch.git
 cd pitchswitch
 pip install -r requirements.txt
 
