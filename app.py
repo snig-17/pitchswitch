@@ -9,9 +9,12 @@ from collections import defaultdict
 
 import streamlit as st
 
+import matplotlib.pyplot as plt
+
 from core.replay import load_match, get_demo_matches, FINAL_THIRD_X
 from core.heat import create_heat
 from core.director import create_director
+from core.pitchcam import render_feed
 
 st.set_page_config(
     page_title="PitchSwitch",
@@ -43,6 +46,7 @@ if "running" not in st.session_state:
     st.session_state.tick = 0
     st.session_state.director = None
     st.session_state.last_source = ""  # how the last switch was decided
+    st.session_state.last_switch_tick = -99  # for the "ON AIR" feed badge
     st.session_state.force_showdown = False  # demo: trigger ambiguous Granite call
     st.session_state.showdown_mids = None    # the two matches pinned into a tie
     st.session_state.showdown_ttl = 0        # ticks remaining to hold the tie
@@ -286,6 +290,7 @@ def process_tick():
             # Granite re-pick confirms the same match (force_log upgrades text).
             if switched:
                 st.session_state.switch_count += 1
+                st.session_state.last_switch_tick = st.session_state.tick
                 st.session_state.switch_log.append(
                     (target_heat.current_minute, decision.narration, decision.target_label)
                 )
@@ -350,9 +355,72 @@ if st.session_state.last_source:
                                   st.session_state.last_source))
 
 # ---------------------------------------------------------------------------
-# Danger Ticker Strip
+# Main View — live broadcast feed (the hero; stays above the fold)
+# ---------------------------------------------------------------------------
+if st.session_state.matches_loaded and st.session_state.current_match:
+    mid = st.session_state.current_match
+    heat = st.session_state.heats[mid]
+    score = st.session_state.scores.get(mid, "0-0")
+    state = heat.get_state_summary()
+
+    main_col, stats_col = st.columns([3, 1])
+
+    with main_col:
+        st.subheader(f"{heat.label} — {score} ({heat.current_minute}')")
+
+        # Live tactical pitch-cam (broadcast feed) — cuts to the current match
+        recent = st.session_state.recent_events.get(mid, [])
+        director = st.session_state.director
+        just_switched = (st.session_state.tick - st.session_state.last_switch_tick) <= 4
+        is_fav = director.is_favourite(heat) if director is not None else False
+        fig = render_feed(heat, recent, score,
+                          just_switched=just_switched, is_favourite=is_fav)
+        st.pyplot(fig, use_container_width=True)
+        plt.close(fig)
+
+        # Recent events feed (text play-by-play under the feed)
+        with st.expander("Play-by-play", expanded=False):
+            if not recent:
+                st.caption("Waiting for events...")
+            for event in reversed(recent[-6:]):
+                loc_str = ""
+                if event.location:
+                    zone = "FINAL THIRD" if event.location[0] > FINAL_THIRD_X else ""
+                    loc_str = f" {zone}" if zone else ""
+                if event.event_type == "Shot":
+                    icon = "GOAL" if event.shot_outcome == "Goal" else "Shot"
+                elif event.event_type == "Carry" and event.location and event.location[0] > FINAL_THIRD_X:
+                    icon = "Carry (final third)"
+                elif event.event_type == "Pressure":
+                    icon = "Pressure"
+                else:
+                    icon = event.event_type
+
+                detail = f"**{event.minute}'** {icon}: {event.player} ({event.team}){loc_str}"
+                if event.xg is not None:
+                    detail += f" | xG: {event.xg:.3f}"
+                if event.shot_outcome == "Goal":
+                    st.success(detail)
+                elif event.event_type == "Shot":
+                    st.warning(detail)
+                else:
+                    st.caption(detail)
+
+    with stats_col:
+        st.metric("Danger", f"{heat.danger:.2f}")
+        st.metric("Derivative", f"{heat.derivative:+.4f}/s")
+        if state["late_game"]:
+            st.warning("LATE GAME (1.5x)")
+        if state["about_to_ignite"]:
+            st.error("BUILDING!")
+        st.caption(f"Events in window: {state['events_in_window']}")
+
+# ---------------------------------------------------------------------------
+# Danger Ticker Strip — the other matches you could cut to
 # ---------------------------------------------------------------------------
 if st.session_state.matches_loaded:
+    st.divider()
+    st.caption("OTHER MATCHES — the Director switches the feed to whichever is hottest")
     cols = st.columns(len(st.session_state.match_data))
     for i, (events, info) in enumerate(st.session_state.match_data):
         mid = info.match_id
@@ -375,7 +443,7 @@ if st.session_state.matches_loaded:
         with cols[i]:
             # Highlight current match
             if is_current:
-                st.markdown(f"### {info.label}")
+                st.markdown(f"### {info.label}  ▶")
             else:
                 st.markdown(f"**{info.label}**")
 
@@ -406,63 +474,6 @@ if st.session_state.matches_loaded:
         p = director.personalizer
         st.caption(f"\\* danger boosted for your team(s): {p.fav_bias:g}x normally, "
                     f"{p.small_nation_bias:g}x for small nations")
-
-    st.divider()
-
-# ---------------------------------------------------------------------------
-# Main View — current match detail
-# ---------------------------------------------------------------------------
-if st.session_state.matches_loaded and st.session_state.current_match:
-    mid = st.session_state.current_match
-    heat = st.session_state.heats[mid]
-    score = st.session_state.scores.get(mid, "0-0")
-    state = heat.get_state_summary()
-
-    main_col, stats_col = st.columns([3, 1])
-
-    with main_col:
-        st.subheader(f"{heat.label} — {score} ({heat.current_minute}')")
-
-        # Recent events feed
-        recent = st.session_state.recent_events.get(mid, [])
-        if recent:
-            for event in reversed(recent[-6:]):
-                loc_str = ""
-                if event.location:
-                    zone = "FINAL THIRD" if event.location[0] > FINAL_THIRD_X else ""
-                    loc_str = f" {zone}" if zone else ""
-                icon = ""
-                if event.event_type == "Shot":
-                    icon = "Shot"
-                    if event.shot_outcome == "Goal":
-                        icon = "GOAL"
-                elif event.event_type == "Carry" and event.location and event.location[0] > FINAL_THIRD_X:
-                    icon = "Carry (final third)"
-                elif event.event_type == "Pressure":
-                    icon = "Pressure"
-                else:
-                    icon = event.event_type
-
-                detail = f"**{event.minute}'** {icon}: {event.player} ({event.team}){loc_str}"
-                if event.xg is not None:
-                    detail += f" | xG: {event.xg:.3f}"
-                if event.shot_outcome == "Goal":
-                    st.success(detail)
-                elif event.event_type == "Shot":
-                    st.warning(detail)
-                else:
-                    st.caption(detail)
-        else:
-            st.caption("Waiting for events...")
-
-    with stats_col:
-        st.metric("Danger", f"{heat.danger:.2f}")
-        st.metric("Derivative", f"{heat.derivative:+.4f}/s")
-        if state["late_game"]:
-            st.warning("LATE GAME (1.5x)")
-        if state["about_to_ignite"]:
-            st.error("BUILDING!")
-        st.caption(f"Events in window: {state['events_in_window']}")
 
 # ---------------------------------------------------------------------------
 # Accuracy Panel + Switch Counter
