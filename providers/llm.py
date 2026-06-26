@@ -198,8 +198,14 @@ _PROVIDERS = {
 }
 
 
+_PROVIDER_CACHE: LLMProvider | None = None
+
+
 def get_provider() -> LLMProvider:
-    """Get the configured LLM provider from .env LLM_PROVIDER setting."""
-    provider_name = os.getenv("LLM_PROVIDER", "ollama").lower()
-    cls = _PROVIDERS.get(provider_name, OllamaProvider)
-    return cls()
+    """Get the configured LLM provider (cached singleton, so warmth persists)."""
+    global _PROVIDER_CACHE
+    if _PROVIDER_CACHE is None:
+        provider_name = os.getenv("LLM_PROVIDER", "ollama").lower()
+        cls = _PROVIDERS.get(provider_name, OllamaProvider)
+        _PROVIDER_CACHE = cls()
+    return _PROVIDER_CACHE

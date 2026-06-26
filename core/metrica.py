@@ -119,6 +119,104 @@ def load_events(game: int, t0: float, dur: float):
     return out
 
 
+def _relabel(captions, home, away):
+    """Rewrite Metrica's anonymised Home/Away captions with team names."""
+    out = []
+    for t, cap in captions:
+        out.append([t, cap.replace("Home", home).replace("Away", away)])
+    return out
+
+
+def _narrate(home, away, danger, favourite, grounding, provider):
+    """One-sentence switch call. Granite-grounded when available, else template."""
+    matched = None
+    if favourite:
+        fav = favourite.strip().lower()
+        if fav in home.lower() or fav in away.lower():
+            matched = home if fav in home.lower() else away
+    prefix = f"Your team {matched}! " if matched else ""
+    if provider is not None and provider.is_warm():
+        facts = grounding.facts_for(home, away) if grounding else ""
+        prompt = (
+            "You are a football match director. In ONE punchy sentence, tell the "
+            f"viewer to switch to {home} vs {away}, where danger is spiking "
+            f"({danger:.2f}). Make it vivid using this context:\n{facts}\n"
+            "Start with 'Switch to' or 'Get to'."
+        )
+        out = provider.generate(prompt, max_tokens=55)
+        if out:
+            return prefix + out.strip()
+    return f"{prefix}Cut to {home} vs {away} — a dangerous attack is building!"
+
+
+def build_unified_broadcast(matchups, favourite: str = "", t0: float = 0.0,
+                            dur: float = 120.0, fps: int = 8,
+                            margin: float = 0.12, dwell: float = 5.0,
+                            narrate: bool = True):
+    """One broadcast over real tracking: the Director cuts to whichever match's
+    danger is pulling ahead (rising differential). Each switch gets a
+    Granite-grounded narration. matchups: [{game, home, away}].
+    """
+    from core.personalize import Personalizer
+    grounding = provider = None
+    if narrate:
+        try:
+            from core.grounding import get_grounding
+            from providers.llm import get_provider
+            grounding = get_grounding()
+            provider = get_provider()
+        except Exception:
+            provider = None
+
+    pz = Personalizer.from_input(favourite)
+    games = []
+    for m in matchups:
+        frames = load_frames(m["game"], t0=t0, dur=dur, fps=fps)
+        mult = pz.multiplier(m["home"], m["away"])
+        danger = [min(frame_danger(f) * mult, 1.0) for f in frames]
+        games.append({
+            "home": m["home"], "away": m["away"],
+            "label": f"{m['home']} vs {m['away']}",
+            "frames": frames, "danger": danger,
+            "captions": _relabel(load_events(m["game"], t0, dur), m["home"], m["away"]),
+        })
+
+    times = [f.t for f in min((g["frames"] for g in games), key=len)]
+    on = 0
+    last_switch = -1e9
+    prev_diff = 0.0
+    granite_cap = 4                              # cap Granite calls to keep Start fast
+    used = 0
+
+    def narr_for(gi, d):
+        nonlocal used
+        prov = provider if used < granite_cap else None
+        if prov is not None and prov.is_warm():
+            used += 1
+        return _narrate(games[gi]["home"], games[gi]["away"], d,
+                        favourite, grounding, prov)
+
+    schedule = [[times[0] if times else t0, 0,
+                 narr_for(0, games[0]["danger"][0] if games[0]["danger"] else 0.0)]]
+    for k, t in enumerate(times):
+        cur = games[on]["danger"][k] if k < len(games[on]["danger"]) else 0.0
+        best, bestd = on, cur
+        for gi, g in enumerate(games):
+            if gi == on:
+                continue
+            d = g["danger"][k] if k < len(g["danger"]) else 0.0
+            if d > bestd:
+                best, bestd = gi, d
+        diff = bestd - cur                       # how far ahead the other match is
+        rising = diff >= prev_diff               # differential increasing
+        if best != on and diff > margin and rising and t - last_switch > dwell:
+            on = best
+            last_switch = t
+            schedule.append([round(t, 1), on, narr_for(on, bestd)])
+        prev_diff = diff
+    return {"games": games, "schedule": schedule}
+
+
 def build_broadcast(games=(1, 2), t0: float = 0.0, dur: float = 180.0,
                     fps: int = 10, dwell: float = 4.0):
     """Assemble a multi-match broadcast: frames + danger + a switch schedule +

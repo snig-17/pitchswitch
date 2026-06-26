@@ -16,7 +16,7 @@ from core.heat import create_heat
 from core.director import create_director
 from core.livefeed import (build_feed, build_broadcast as broadcast_canvas,
                            build_audio_player)
-from core.metrica import build_broadcast as assemble_broadcast
+from core.metrica import build_unified_broadcast as assemble_unified
 from providers.tts import get_tts, request_speak, get_audio
 
 st.set_page_config(
@@ -74,22 +74,6 @@ with st.sidebar:
     favourite_team = st.text_input(
         "Favourite team(s)", placeholder="e.g. Argentina, South Korea",
         help="Comma-separated. Small nations get an extra danger boost.")
-    speed = st.slider("Replay speed", 10, 200, 60, step=10,
-                       help="Higher = faster replay")
-    feed_mode = st.radio(
-        "Main feed", ["Tactical cam", "Tracking feed", "Video feed"],
-        help="Tactical cam = pitch synced to the model. Tracking feed = real "
-             "25fps player movement (Metrica), cuts between matches. "
-             "Video feed = real FIFA video (blocked from embedding).")
-    video_mode = feed_mode == "Video feed"
-    tracking_mode = feed_mode == "Tracking feed"
-
-    commentary = False
-    if get_tts().available():
-        commentary = st.toggle("Spoken commentary (Watson TTS)", value=False,
-                                help="Speaks each switch call in a British "
-                                     "commentator voice via IBM Watson TTS.")
-
     col_a, col_b = st.columns(2)
     with col_a:
         start = st.button("Start Demo", disabled=st.session_state.running,
@@ -98,70 +82,36 @@ with st.sidebar:
         stop = st.button("Stop", disabled=not st.session_state.running,
                           use_container_width=True)
 
-    # Demo control: force a neck-and-neck moment so the Granite reasoning
-    # tier (ambiguous calls) reliably fires on stage.
-    if st.button("Force Granite Showdown", disabled=not st.session_state.running,
-                  use_container_width=True,
-                  help="Pin two matches into a near-tie so Granite has to "
-                       "reason about which one to show."):
-        st.session_state.force_showdown = True
-
-    # Granite readiness (the showdown only reasons once the model is warm)
-    if st.session_state.director is not None:
-        director = st.session_state.director
-        if director.provider.is_warm():
-            st.caption("Granite: ready")
-        else:
-            st.caption("Granite: warming up...")
-        if director.grounding.loaded:
-            src = "Docling" if director.grounding.used_docling else "markdown"
-            st.caption(f"Primers: {len(director.grounding.kb)} nations ({src})")
-        else:
-            st.caption("Primers: loading...")
-
-    if st.session_state.switch_log:
-        st.divider()
-        st.subheader("Switch Log")
-        for minute, reason, label in reversed(st.session_state.switch_log[-10:]):
-            st.caption(f"**{minute}'** {label}")
-            st.caption(reason)
+    st.divider()
+    st.caption("One AI whip-around feed over real player tracking. The Director "
+               "cuts between matches when one's danger pulls ahead. Granite "
+               "narrates each switch, grounded by Docling team primers.")
 
 # ---------------------------------------------------------------------------
 # Load matches on first start
 # ---------------------------------------------------------------------------
+# Real tracking games mapped to World Cup fixtures (so Granite/Docling/
+# personalization work on real movement). Team labels are illustrative.
+MATCHUPS = [
+    {"game": 1, "home": "France", "away": "Argentina"},
+    {"game": 2, "home": "South Korea", "away": "Germany"},
+]
+
 if start and not st.session_state.running:
-    with st.spinner("Loading matches from StatsBomb..."):
-        st.session_state.match_data = []
-        st.session_state.heats = {}
-        st.session_state.event_idx = {}
-        st.session_state.scores = {}
-        st.session_state.recent_events = defaultdict(list)
-        st.session_state.flag_times = defaultdict(list)
-        st.session_state.feed_match = None
-
-        for match_id, label in get_demo_matches():
-            events, info = load_match(match_id)
-            st.session_state.match_data.append((events, info))
-            st.session_state.heats[match_id] = create_heat(
-                info.match_id, info.label, info.home_team, info.away_team
-            )
-            st.session_state.event_idx[match_id] = 0
-            st.session_state.scores[match_id] = "0-0"
-
-        st.session_state.current_match = st.session_state.match_data[0][1].match_id
-        st.session_state.director = create_director(favourite_team=favourite_team)
-        st.session_state.director.current_match_id = st.session_state.current_match
-        st.session_state.director.warmup()  # pre-load the LLM in the background
-        st.session_state.director.load_grounding()  # parse primers (Docling)
+    with st.spinner("Warming Granite + Docling, building the broadcast..."):
+        from providers.llm import get_provider
+        get_provider().warmup()  # synchronous so switch narration is Granite
+        try:
+            bd = assemble_unified(MATCHUPS, favourite=favourite_team,
+                                  t0=0, dur=120, fps=8)
+            st.session_state.broadcast_html = broadcast_canvas(bd)
+            st.session_state.schedule = bd["schedule"]
+            st.session_state.broadcast_error = ""
+        except Exception as exc:
+            st.session_state.broadcast_error = str(exc)
+            st.session_state.broadcast_html = ""
         st.session_state.matches_loaded = True
         st.session_state.running = True
-        st.session_state.switch_count = 0
-        st.session_state.goals_seen = 0
-        st.session_state.goals_predicted = 0
-        st.session_state.lead_times = []
-        st.session_state.switch_log = []
-        st.session_state.narration = "Matches loaded. Replay starting..."
-        st.session_state.tick = 0
     st.rerun()
 
 if stop:
@@ -348,18 +298,35 @@ def process_tick():
     st.session_state.tick += 1
 
 
-# Store favourite team in session state for the processing function
-st.session_state["favourite_team_val"] = favourite_team
+# ---------------------------------------------------------------------------
+# UI Layout — single unified broadcast feed
+# ---------------------------------------------------------------------------
+st.title("PitchSwitch")
+st.caption("One AI whip-around feed over real player tracking — the Director "
+           "cuts to whichever match is heating up.")
 
-# ---------------------------------------------------------------------------
-# Run tick if active
-# ---------------------------------------------------------------------------
-if st.session_state.running:
-    process_tick()
+if not st.session_state.matches_loaded:
+    st.info("Pick your favourite team(s), then hit Start Demo. The Director "
+            "watches both matches and cuts you to the one about to ignite.")
+elif not st.session_state.get("broadcast_html"):
+    err = st.session_state.get("broadcast_error", "")
+    st.warning("Tracking data not found — run `bash scripts/get_metrica.sh`, "
+               "then Start again." + (f"\n\n({err})" if err else ""))
+else:
+    components.html(st.session_state.broadcast_html, height=620, scrolling=False)
+    st.caption("Real 25fps player tracking (Metrica open data) mapped to World "
+               "Cup fixtures: a representative stand-in for the licensed "
+               "broadcast feed (FIFA blocks real match video from embedding). "
+               "Granite narrates each switch, Docling-grounded; your team(s) "
+               "get a danger boost.")
+    sched = st.session_state.get("schedule", [])
+    if sched:
+        with st.expander("Director's switch calls"):
+            for t, gi, narr in sched:
+                st.caption(f"**{int(t // 60)}:{int(t % 60):02d}** — {narr}")
 
-# ---------------------------------------------------------------------------
-# UI Layout
-# ---------------------------------------------------------------------------
+st.stop()  # unified feed is the whole UI; legacy multi-mode layout below is unused
+
 st.title("PitchSwitch")
 
 # Narration banner

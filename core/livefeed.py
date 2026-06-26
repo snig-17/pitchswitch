@@ -260,12 +260,19 @@ function draw(now){
   const mm=Math.floor(at/60), ss=Math.floor(at%60);
   ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.fillText(g.label+'  \\u25b6 LIVE', 16, 26);
   ctx.fillStyle='#bcd'; ctx.font='13px sans-serif'; ctx.fillText(mm+':'+(ss<10?'0':'')+ss, 16, 46);
-  ctx.fillStyle=HOME; ctx.fillText('\\u25cf Home', 16, H-44);
-  ctx.fillStyle=AWAY; ctx.fillText('\\u25cf Away', 90, H-44);
+  ctx.fillStyle=HOME; ctx.fillText('\\u25cf '+g.home, 16, H-44);
+  ctx.fillStyle=AWAY; ctx.fillText('\\u25cf '+g.away, 26+ctx.measureText('\\u25cf '+g.home).width+18, H-44);
 
-  // switch banner (brief, after a cut)
-  if (at - switchT < 2.6 && reason){ ctx.fillStyle='rgba(255,59,59,0.85)'; ctx.fillRect(0,60,W,30);
-    ctx.fillStyle='#fff'; ctx.font='bold 15px sans-serif'; ctx.fillText('\\u25b6 '+reason, 16, 80); }
+  // switch banner (brief, after a cut) — wraps long Granite narration
+  if (at - switchT < 4.0 && reason){
+    ctx.font='bold 15px sans-serif';
+    const words=reason.split(' '); let lines=[], ln='';
+    for(const w of words){ if(ctx.measureText(ln+' '+w).width>W-32){lines.push(ln);ln=w;} else ln=(ln?ln+' '+w:w);} if(ln)lines.push(ln);
+    lines=lines.slice(0,2);
+    ctx.fillStyle='rgba(255,59,59,0.88)'; ctx.fillRect(0,58,W,14+lines.length*20);
+    ctx.fillStyle='#fff';
+    lines.forEach((l,li)=>ctx.fillText((li?'   ':'\\u25b6 ')+l, 16, 78+li*20));
+  }
 
   // play-by-play caption (lower third)
   const cap = caption(g, at);
@@ -315,6 +322,7 @@ def build_broadcast(bdata, speed=1.4, home_color="#4da6ff", away_color="#ff8c42"
     import json
     games = [{
         "label": gd["label"],
+        "home": gd.get("home", "Home"), "away": gd.get("away", "Away"),
         "captions": gd["captions"],
         "frames": [{"t": fr.t, "b": list(fr.ball) if fr.ball else None,
                     "h": [list(p) for p in fr.home], "a": [list(p) for p in fr.away]}
