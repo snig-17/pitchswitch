@@ -50,8 +50,10 @@ class LLMProvider(ABC):
 
 class OllamaProvider(LLMProvider):
     # Generation timeout. Cold model loads are handled by warmup(), so once
-    # warm a generation should comfortably finish within this window.
-    GEN_TIMEOUT = 30
+    # warm a generation should comfortably finish within this window. Generous
+    # because narration runs async (off the UI thread) and real Granite on CPU
+    # can take 10-40s depending on model size.
+    GEN_TIMEOUT = 60
     # Cold load of a local model can take 30s+; give warmup a long leash.
     WARMUP_TIMEOUT = 180
 
@@ -106,6 +108,8 @@ class WatsonxProvider(LLMProvider):
         self.api_key = os.getenv("WATSONX_API_KEY", "")
         self.project_id = os.getenv("WATSONX_PROJECT_ID", "")
         self.url = os.getenv("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
+        # Granite text model; override per region (e.g. eu-gb has no Granite).
+        self.model = os.getenv("WATSONX_MODEL", "ibm/granite-3-8b-instruct")
 
     def generate(self, prompt: str, max_tokens: int = 256) -> str:
         if not self.api_key or not self.project_id:
@@ -125,7 +129,7 @@ class WatsonxProvider(LLMProvider):
             resp = requests.post(
                 f"{self.url}/ml/v1/text/generation?version=2024-03-14",
                 json={
-                    "model_id": "ibm/granite-3-8b-instruct",
+                    "model_id": self.model,
                     "input": prompt,
                     "project_id": self.project_id,
                     "parameters": {"max_new_tokens": max_tokens},
