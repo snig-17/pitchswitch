@@ -1,30 +1,45 @@
 # PitchSwitch
 
-**AI-powered multi-match whip-around companion for the FIFA World Cup 2026.**
-
-During the World Cup group stage, the final round of matches kicks off simultaneously. Fans watching one match miss the buildup to a goal in another. PitchSwitch watches all live matches at once and switches you to the match that's about to produce something, anticipating the moment before it happens, not reacting after.
+> Like NFL RedZone, but for soccer, and it switches you *before* the goal instead of after.
 
 ## The Problem
 
-NFL RedZone works because American football is discrete: plays stop, scoring is frequent, clean cut-points exist. Soccer is continuous and low-scoring. A naive "switch when a goal happens" tool would sit idle for 40 minutes and then cut you in after the goal you wanted to see.
+In the World Cup group stage, the final round of matches in each group kicks off at the exact same time. This isn't an accident. FIFA made it a rule after West Germany and Austria played out a result in 1982 that knocked Algeria out, so now both games in a group run simultaneously and nobody can play to a convenient scoreline.
 
-PitchSwitch solves this with **anticipation**: detecting that a dangerous moment is building (sustained final-third pressure, rising xG, a penalty about to be taken) and switching you there seconds before the shot, save, or goal.
+The catch is you can only watch one screen. Take the 2018 group finale: Germany were playing South Korea while Mexico played Sweden at the same moment, and the two results were tangled together. Pick the Mexico game and you miss South Korea knocking the defending champions out in stoppage time. It happened again in 2022, Japan vs Spain running alongside Germany vs Costa Rica, with the qualifying table flipping three or four times in the last ten minutes across two pitches you couldn't watch at once.
+
+Broadcasters don't really fix this. NFL RedZone works because American football stops between plays and scores constantly, so there are clean moments to cut to. Soccer is the opposite. It flows nonstop and barely scores, so a tool that just switches you to a goal after it goes in is useless, because it shows you the thing you already missed. And smaller nations get almost no airtime at all, even when theirs is the game worth watching.
+
+## The Solution
+
+PitchSwitch watches every match at once and tries to get you to the action *before* it happens, not after.
+
+It gives each match a live danger score from the play-by-play data, things like balls carried into the final third, pressure in the box, shots, corners and penalties. The key signal is how fast that danger is rising, which is what catches a game about to boil over instead of one that already has. On the test matches it flagged goals with about 70 seconds of warning on average.
+
+When two matches heat up at the same time and the call isn't obvious, IBM Granite reads the full state of all of them, decides where to send you, and explains it in a line a TV presenter would actually say. Those lines are grounded in real team context parsed with IBM Docling, so the narration knows Son drives Korea's press and Mbappe is France's outlet, not just the score.
+
+You can name your teams too, including the small nations broadcasters ignore, and it leans the switching toward them. The main screen is a live tactical view of whatever match you've been cut to, and it jumps between games the way a director in a control room would.
 
 ## Technical Approach
 
 ```
-statsbombpy (WC data)
+statsbombpy (World Cup event data)
         |
-  replay.py (asyncio, virtual clock, concurrent matches)
+  replay.py        asyncio virtual clock, concurrent matches
         |
-  heat.py (rolling 90s danger score, time-based derivative)
+  heat.py          rolling 90s danger score + rising-danger derivative
         |
-  director.py (heuristic + IBM Granite reasoning)
+  director.py      heuristic switch + IBM Granite reasoning on close calls
+        |        \
+        |         grounding.py   IBM Docling parses team primers -> KB
+        |         personalize.py multi-team + small-nation bias
         |
-  personalize.py (favourite team bias)
+  pitchcam.py      mplsoccer live tactical feed
         |
-  app.py (Streamlit dashboard + Danger Ticker)
+  app.py           Streamlit UI: broadcast feed, danger ticker, accuracy
 ```
+
+LLM provider is swappable (`providers/llm.py`): Granite runs locally via Ollama, or on IBM watsonx.ai / Replicate in the cloud.
 
 ### How the Anticipation Model Works
 
