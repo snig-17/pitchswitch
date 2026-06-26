@@ -2,6 +2,8 @@
 
 > Like NFL RedZone, but for soccer, and it switches you *before* the goal instead of after.
 
+**▶ Live demo: https://pitchswitch-g5cvhbdq89gvdfxmb4awmn.streamlit.app** — pick a favourite team, hit Start Demo, and tap "🔊 commentary" to hear the AI call the switches.
+
 ## The Problem
 
 In the World Cup group stage, the final round of matches in each group kicks off at the exact same time. This isn't an accident. FIFA made it a rule after West Germany and Austria played out a result in 1982 that knocked Algeria out, so now both games in a group run simultaneously and nobody can play to a convenient scoreline.
@@ -122,11 +124,14 @@ Select your favourite team(s), including small nations that broadcasters ignore.
 
 ## Quick Start
 
+No install needed to try it — use the **[live demo](https://pitchswitch-g5cvhbdq89gvdfxmb4awmn.streamlit.app)**. To run locally (and generate fresh AI narration via your own Granite):
+
 ```bash
 # 1. Clone and install
 git clone https://github.com/snig-17/pitchswitch.git
 cd pitchswitch
-pip install -r requirements.txt
+pip install -r requirements.txt        # runtime (serves the pre-built cache)
+# pip install -r requirements-dev.txt  # to rebuild the cache / run calibration
 
 # 2. Download the open tracking data (Metrica sample games, ~120MB, gitignored)
 bash scripts/get_metrica.sh
