@@ -57,9 +57,8 @@ with st.sidebar:
                           use_container_width=True)
 
     st.divider()
-    st.caption("One AI whip-around feed over real player tracking. The Director "
-               "cuts between matches when one's danger pulls ahead. Granite "
-               "narrates each switch, grounded by Docling team primers.")
+    st.caption("Tip: name a small nation broadcasters ignore — the Director "
+               "leans the switching toward your team.")
 
 # ---------------------------------------------------------------------------
 # Load matches on first start
@@ -131,8 +130,12 @@ st.caption("One AI whip-around feed over real player tracking — the Director "
            "cuts to whichever match is heating up.")
 
 if not st.session_state.matches_loaded:
-    st.info("Pick your favourite team(s), then hit Start Demo. The Director "
-            "watches both matches and cuts you to the one about to ignite.")
+    st.markdown(
+        "<div style='background:#15311a;border:1px solid #2c5135;border-radius:8px;"
+        "padding:14px 16px;color:#e8efe9'>Pick your favourite team(s), then hit "
+        "<b>Start Demo</b>. The Director watches both matches and cuts you to the "
+        "one about to ignite.</div>",
+        unsafe_allow_html=True)
 elif not st.session_state.get("broadcast_html"):
     err = st.session_state.get("broadcast_error", "")
     st.warning("Tracking data not found — run `bash scripts/get_metrica.sh`, "

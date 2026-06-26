@@ -213,8 +213,8 @@ if(F.length) requestAnimationFrame(frame); else pitch();
 _BROADCAST_TEMPLATE = """
 <div style="background:#0d1f12;border-radius:8px;padding:6px;position:relative">
 <canvas id="bc" width="900" height="560" style="width:100%;height:auto;display:block"></canvas>
-<div id="unlock" onclick="unlock()" style="display:none;position:absolute;top:10px;
-  right:10px;cursor:pointer;background:#ff3b3b;color:#fff;padding:6px 10px;
+<div id="unlock" onclick="unlock()" style="display:none;position:absolute;bottom:12px;
+  right:12px;cursor:pointer;background:#ff3b3b;color:#fff;padding:6px 10px;
   border-radius:6px;font:bold 13px sans-serif">&#128266; Tap for commentary</div>
 <audio id="au"></audio>
 </div>
@@ -279,8 +279,14 @@ function draw(now){
   const span=Math.max(b.t-a.t,0.001), f=Math.max(0,Math.min(1,(at-a.t)/span));
 
   pitch();
-  if(a.b){ const bx=a.b[0]; if(bx>0.62||bx<0.38){ctx.globalAlpha=0.18;ctx.fillStyle='rgba(255,59,59,1)';
-    if(bx>0.62)ctx.fillRect(0.62*W,6,0.38*W-6,H-12); else ctx.fillRect(6,6,0.38*W-6,H-12); ctx.globalAlpha=1;} }
+  if(a.b){ const bx=a.b[0]; if(bx>0.62||bx<0.38){
+    // danger glow: a red gradient strongest at the threatened goal, fading to
+    // nothing by midfield — reads as 'danger here', not a muddy wash over the third
+    const right = bx>0.62;
+    const g = right ? ctx.createLinearGradient(0.55*W,0,W,0) : ctx.createLinearGradient(0.45*W,0,0,0);
+    g.addColorStop(0,'rgba(255,40,40,0)'); g.addColorStop(1,'rgba(255,40,40,0.42)');
+    ctx.fillStyle=g;
+    if(right) ctx.fillRect(0.55*W,6,0.45*W-6,H-12); else ctx.fillRect(6,6,0.45*W-6,H-12); } }
   const nh=Math.min(a.h.length,b.h.length);
   for(let k=0;k<nh;k++){ const pa=a.h[k],pb=b.h[k]; if(!pa||!pb) continue;
     avatar(lerp(pa[0],pb[0],f)*W, lerp(pa[1],pb[1],f)*H, g.hc, pa[2], g.hn); }
