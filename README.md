@@ -178,6 +178,10 @@ app then loads each broadcast in ~1s.
 - **mplsoccer / Streamlit / HTML5 canvas** (the live feed + UI)
 - **Claude Code** (development tool)
 
+## Tests
+
+`pytest` runs the unit suite over the live path (danger model, switching bias, Coach, and a heat-model regression) — green in CI on every push. See [TESTING.md](TESTING.md).
+
 ## Design
 
 The visual language (broadcast control-room theme, tokens, type, component vocabulary) is documented in [DESIGN.md](DESIGN.md).

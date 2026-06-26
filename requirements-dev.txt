@@ -7,3 +7,7 @@ mplsoccer>=1.4.0
 # IBM Docling grounds Granite narration (heavy ML deps). Optional — grounding
 # falls back to plain-markdown parsing if absent.
 docling>=2.0.0
+# Test suite (see TESTING.md). The tests only need pandas + statsbombpy from
+# above, not docling/mplsoccer, so CI installs a slim subset.
+pytest>=8.0.0
+pytest-cov>=4.0.0
