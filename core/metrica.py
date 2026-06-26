@@ -18,6 +18,20 @@ import pandas as pd
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "metrica"
 FPS_RAW = 25
 
+# National kit colours (shirt, jersey-number) so avatars read as real teams.
+TEAM_KITS = {
+    "france": ("#1e3a8a", "#ffffff"),
+    "argentina": ("#75aadb", "#0a3161"),
+    "south korea": ("#c8102e", "#ffffff"),
+    "germany": ("#e8e8e8", "#111111"),
+    "spain": ("#c60b1e", "#ffd400"),
+    "portugal": ("#006600", "#ffffff"),
+    "brazil": ("#fde000", "#1b6b2f"),
+    "england": ("#f4f4f4", "#0a3161"),
+}
+DEFAULT_HOME_KIT = ("#4da6ff", "#ffffff")
+DEFAULT_AWAY_KIT = ("#ff8c42", "#111111")
+
 
 def _load_team(path: Path):
     """Return (times, [(name, xs, ys), ...]) including 'Ball' as the last pair."""
@@ -37,52 +51,57 @@ def _load_team(path: Path):
 class Frame:
     t: float
     ball: tuple[float, float] | None
-    home: list[tuple[float, float]]
-    away: list[tuple[float, float]]
+    # fixed-length slots; each is (x, y, jersey_number) or None when off-pitch
+    home: list[tuple[float, float, str] | None]
+    away: list[tuple[float, float, str] | None]
+
+
+def _jersey(name: str) -> str:
+    """'Player11' -> '11'."""
+    digits = "".join(c for c in name if c.isdigit())
+    return digits or "?"
 
 
 def load_frames(game: int, t0: float = 0.0, dur: float = 60.0,
-                fps: int = 12, max_players: int = 11) -> list[Frame]:
+                fps: int = 12) -> list[Frame]:
     """Load a downsampled window of tracking frames for one Metrica game.
 
-    t0/dur in seconds of match time; fps is the output frame rate.
+    Player slots are kept in fixed column order (None when a player is off the
+    pitch) so a slot index always maps to the same jersey number across frames.
     """
     home_path = DATA_DIR / f"g{game}_RawTrackingData_Home_Team.csv"
     away_path = DATA_DIR / f"g{game}_RawTrackingData_Away_Team.csv"
     ht, _hp, hpairs = _load_team(home_path)
     at, _ap, apairs = _load_team(away_path)
 
-    # Ball is the last pair in the home file
-    ball_name, bxs, bys = hpairs[-1]
+    ball_name, bxs, bys = hpairs[-1]      # ball is the last pair in the home file
     home_pairs = hpairs[:-1]
     away_pairs = apairs[:-1]
+    home_nums = [_jersey(n) for n, _, _ in home_pairs]
+    away_nums = [_jersey(n) for n, _, _ in away_pairs]
 
     step = max(1, round(FPS_RAW / fps))
     frames: list[Frame] = []
-    n = len(ht)
-    for i in range(0, n, step):
+    for i in range(0, len(ht), step):
         t = float(ht[i])
         if t < t0:
             continue
         if t > t0 + dur:
             break
-        home = []
-        for _name, xs, ys in home_pairs:
-            x, y = xs[i], ys[i]
-            if x == x and y == y:  # not NaN
-                home.append((round(float(x), 4), round(float(y), 4)))
-            if len(home) >= max_players:
-                break
-        away = []
-        for _name, xs, ys in away_pairs:
-            x, y = xs[i], ys[i]
-            if x == x and y == y:
-                away.append((round(float(x), 4), round(float(y), 4)))
-            if len(away) >= max_players:
-                break
+
+        def slots(pairs, nums):
+            out = []
+            for (_n, xs, ys), num in zip(pairs, nums):
+                x, y = xs[i], ys[i]
+                out.append((round(float(x), 4), round(float(y), 4), num)
+                           if x == x and y == y else None)
+            return out
+
         bx, by = bxs[i], bys[i]
         ball = (round(float(bx), 4), round(float(by), 4)) if bx == bx else None
-        frames.append(Frame(t=round(t, 2), ball=ball, home=home, away=away))
+        frames.append(Frame(t=round(t, 2), ball=ball,
+                            home=slots(home_pairs, home_nums),
+                            away=slots(away_pairs, away_nums)))
     return frames
 
 
@@ -95,7 +114,7 @@ def frame_danger(fr: Frame) -> float:
     edge = max(bx, 1 - bx)                 # 0.5 (center) .. 1.0 (goal line)
     base = max(0.0, (edge - 0.60) / 0.40)  # ramps up inside the final third
     end = 1.0 if bx > 0.5 else 0.0
-    near = sum(1 for p in (fr.home + fr.away) if abs(p[0] - end) < 0.25)
+    near = sum(1 for p in (fr.home + fr.away) if p and abs(p[0] - end) < 0.25)
     return round(min(base * (0.55 + 0.08 * near), 1.0), 3)
 
 
@@ -174,10 +193,14 @@ def build_unified_broadcast(matchups, favourite: str = "", t0: float = 0.0,
         frames = load_frames(m["game"], t0=t0, dur=dur, fps=fps)
         mult = pz.multiplier(m["home"], m["away"])
         danger = [min(frame_danger(f) * mult, 1.0) for f in frames]
+        hshirt, hnum = TEAM_KITS.get(m["home"].lower(), DEFAULT_HOME_KIT)
+        ashirt, anum = TEAM_KITS.get(m["away"].lower(), DEFAULT_AWAY_KIT)
         games.append({
             "home": m["home"], "away": m["away"],
             "label": f"{m['home']} vs {m['away']}",
             "frames": frames, "danger": danger,
+            "home_color": hshirt, "home_num": hnum,
+            "away_color": ashirt, "away_num": anum,
             "captions": _relabel(load_events(m["game"], t0, dur), m["home"], m["away"]),
         })
 

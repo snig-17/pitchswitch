@@ -215,7 +215,7 @@ const D = __DATA__;
 const cv = document.getElementById('bc'), ctx = cv.getContext('2d');
 const au = document.getElementById('au'), ub = document.getElementById('unlock');
 const W = cv.width, H = cv.height;
-const HOME = D.home_color, AWAY = D.away_color, SKIN = '#f0c8a0';
+const SKIN = '#f0c8a0';        // per-team kit colours now live on each game
 const SCHED = D.schedule;       // [[t, gi], ...]
 let lastGi = -1, audioOk = false, pendingAudio = null;
 function unlock(){ audioOk = true; ub.style.display='none'; if(pendingAudio) playClip(pendingAudio); }
@@ -235,12 +235,22 @@ function pitch(){
   const y1=0.21*H,y2=0.79*H; ctx.strokeRect(6,y1,0.16*W,y2-y1); ctx.strokeRect(W-6-0.16*W,y1,0.16*W,y2-y1);
   ctx.globalAlpha=1;
 }
-function avatar(x,y,color){
-  ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(x,y+11,7,2.4,0,0,7); ctx.fill();
-  ctx.fillStyle=color; ctx.beginPath();
-  ctx.moveTo(x-6,y+9); ctx.quadraticCurveTo(x-7,y-2,x-3.5,y-3);
-  ctx.lineTo(x+3.5,y-3); ctx.quadraticCurveTo(x+7,y-2,x+6,y+9); ctx.closePath(); ctx.fill();
-  ctx.fillStyle=SKIN; ctx.beginPath(); ctx.arc(x,y-7,3.6,0,7); ctx.fill();
+function avatar(x,y,shirt,num,numCol){
+  ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(x,y+12,8,2.6,0,0,7); ctx.fill();
+  // shirt (with short sleeves) + shorts
+  ctx.fillStyle=shirt;
+  ctx.beginPath();
+  ctx.moveTo(x-8,y-1); ctx.lineTo(x-5,y-4);           // left sleeve
+  ctx.lineTo(x-4,y-5); ctx.lineTo(x+4,y-5); ctx.lineTo(x+5,y-4);
+  ctx.lineTo(x+8,y-1); ctx.lineTo(x+6,y+3);           // right sleeve
+  ctx.lineTo(x+5,y+9); ctx.lineTo(x-5,y+9); ctx.lineTo(x-6,y+3);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#26324a'; ctx.fillRect(x-4,y+9,8,4); // shorts
+  // head
+  ctx.fillStyle=SKIN; ctx.beginPath(); ctx.arc(x,y-8,3.4,0,7); ctx.fill();
+  // jersey number
+  if(num){ ctx.fillStyle=numCol; ctx.font='bold 6px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(num, x, y+4); ctx.textAlign='left'; }
 }
 function lerp(a,b,f){return a+(b-a)*f;}
 function onAir(at){ let gi=0,st=START; for(const s of SCHED){ if(s[0]<=at){gi=s[1];st=s[0];} else break; } return [gi,st]; }
@@ -261,9 +271,11 @@ function draw(now){
   if(a.b){ const bx=a.b[0]; if(bx>0.62||bx<0.38){ctx.globalAlpha=0.18;ctx.fillStyle='rgba(255,59,59,1)';
     if(bx>0.62)ctx.fillRect(0.62*W,6,0.38*W-6,H-12); else ctx.fillRect(6,6,0.38*W-6,H-12); ctx.globalAlpha=1;} }
   const nh=Math.min(a.h.length,b.h.length);
-  for(let k=0;k<nh;k++) avatar(lerp(a.h[k][0],b.h[k][0],f)*W, lerp(a.h[k][1],b.h[k][1],f)*H, HOME);
+  for(let k=0;k<nh;k++){ const pa=a.h[k],pb=b.h[k]; if(!pa||!pb) continue;
+    avatar(lerp(pa[0],pb[0],f)*W, lerp(pa[1],pb[1],f)*H, g.hc, pa[2], g.hn); }
   const na=Math.min(a.a.length,b.a.length);
-  for(let k=0;k<na;k++) avatar(lerp(a.a[k][0],b.a[k][0],f)*W, lerp(a.a[k][1],b.a[k][1],f)*H, AWAY);
+  for(let k=0;k<na;k++){ const pa=a.a[k],pb=b.a[k]; if(!pa||!pb) continue;
+    avatar(lerp(pa[0],pb[0],f)*W, lerp(pa[1],pb[1],f)*H, g.ac, pa[2], g.an); }
   if(a.b&&b.b){ const bx=lerp(a.b[0],b.b[0],f)*W, by=lerp(a.b[1],b.b[1],f)*H;
     ctx.beginPath(); ctx.arc(bx,by,6,0,7); ctx.fillStyle='#fff'; ctx.fill(); ctx.strokeStyle='#000'; ctx.lineWidth=1.5; ctx.stroke(); }
 
@@ -271,8 +283,8 @@ function draw(now){
   const mm=Math.floor(at/60), ss=Math.floor(at%60);
   ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.fillText(g.label+'  \\u25b6 LIVE', 16, 26);
   ctx.fillStyle='#bcd'; ctx.font='13px sans-serif'; ctx.fillText(mm+':'+(ss<10?'0':'')+ss, 16, 46);
-  ctx.fillStyle=HOME; ctx.fillText('\\u25cf '+g.home, 16, H-44);
-  ctx.fillStyle=AWAY; ctx.fillText('\\u25cf '+g.away, 26+ctx.measureText('\\u25cf '+g.home).width+18, H-44);
+  ctx.fillStyle=g.hc; ctx.fillText('\\u25cf '+g.home, 16, H-44);
+  ctx.fillStyle=g.ac; ctx.fillText('\\u25cf '+g.away, 26+ctx.measureText('\\u25cf '+g.home).width+18, H-44);
 
   // switch banner (brief, after a cut) — wraps long Granite narration
   if (at - switchT < 4.0 && reason){
@@ -334,10 +346,13 @@ def build_broadcast(bdata, speed=1.4, home_color="#4da6ff", away_color="#ff8c42"
     games = [{
         "label": gd["label"],
         "home": gd.get("home", "Home"), "away": gd.get("away", "Away"),
+        "hc": gd.get("home_color", "#4da6ff"), "hn": gd.get("home_num", "#fff"),
+        "ac": gd.get("away_color", "#ff8c42"), "an": gd.get("away_num", "#111"),
         "narration": gd.get("narration", ""), "audio": gd.get("audio"),
         "captions": gd["captions"],
         "frames": [{"t": fr.t, "b": list(fr.ball) if fr.ball else None,
-                    "h": [list(p) for p in fr.home], "a": [list(p) for p in fr.away]}
+                    "h": [list(p) if p else None for p in fr.home],
+                    "a": [list(p) if p else None for p in fr.away]}
                    for fr in gd["frames"]],
     } for gd in bdata["games"]]
     data = {"games": games, "schedule": bdata["schedule"], "speed": speed,
