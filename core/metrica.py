@@ -204,6 +204,32 @@ def build_unified_broadcast(matchups, favourite: str = "", t0: float = 0.0,
             "captions": _relabel(load_events(m["game"], t0, dur), m["home"], m["away"]),
         })
 
+    # Coach: explain rule events (penalty/foul/card/corner/goal) per match,
+    # Granite-generated + Docling-grounded, spoken in a distinct voice.
+    from core.coach import explain, load_coach_events
+    COACH_VOICE = "en-GB_KateV3Voice"
+    tts = None
+    if voice:
+        try:
+            from providers.tts import get_tts
+            tts = get_tts()
+        except Exception:
+            tts = None
+    text_by_cat: dict[str, str] = {}     # one Granite explanation per category
+    audio_by_cat: dict[str, str | None] = {}
+    for g, m in zip(games, matchups):
+        coach = []
+        for ct, cat in load_coach_events(m["game"], t0, dur):
+            if cat not in text_by_cat:
+                text_by_cat[cat] = explain(cat, provider)
+            text = text_by_cat[cat]
+            if tts is not None and cat not in audio_by_cat:
+                import base64
+                raw = tts.synthesize(text, voice=COACH_VOICE)
+                audio_by_cat[cat] = base64.b64encode(raw).decode("ascii") if raw else None
+            coach.append([ct, cat, text, audio_by_cat.get(cat)])
+        g["coach"] = coach
+
     # One Granite-grounded narration per match (reused on each cut), plus
     # optional spoken audio. Two LLM calls total instead of one per switch.
     for g in games:

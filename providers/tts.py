@@ -33,8 +33,9 @@ class WatsonTTS:
     def available(self) -> bool:
         return bool(self.apikey and self.url)
 
-    def synthesize(self, text: str) -> bytes | None:
-        """Return MP3 audio bytes for `text`, or None on any failure.
+    def synthesize(self, text: str, voice: str | None = None) -> bytes | None:
+        """Return MP3 audio bytes for `text`, or None on any failure. `voice`
+        overrides the default (e.g. a distinct voice for the Coach persona).
 
         Watson services accept HTTP basic auth with username 'apikey'.
         """
@@ -42,7 +43,7 @@ class WatsonTTS:
             return None
         try:
             resp = requests.post(
-                f"{self.url}/v1/synthesize?voice={self.voice}",
+                f"{self.url}/v1/synthesize?voice={voice or self.voice}",
                 auth=("apikey", self.apikey),
                 headers={"Content-Type": "application/json", "Accept": "audio/mp3"},
                 json={"text": text},

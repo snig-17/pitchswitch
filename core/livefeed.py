@@ -217,7 +217,7 @@ const au = document.getElementById('au'), ub = document.getElementById('unlock')
 const W = cv.width, H = cv.height;
 const SKIN = '#f0c8a0';        // per-team kit colours now live on each game
 const SCHED = D.schedule;       // [[t, gi], ...]
-let lastGi = -1, audioOk = false, pendingAudio = null;
+let lastGi = -1, audioOk = false, pendingAudio = null, lastCoachKey = '';
 function unlock(){ audioOk = true; ub.style.display='none'; if(pendingAudio) playClip(pendingAudio); }
 function playClip(b64){ if(!b64) return; au.src='data:audio/mp3;base64,'+b64;
   au.play().then(()=>{audioOk=true;}).catch(()=>{audioOk=false; pendingAudio=b64; ub.style.display='block';}); }
@@ -301,6 +301,24 @@ function draw(now){
   const cap = caption(g, at);
   if(cap){ ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,H-30,W,30);
     ctx.fillStyle='#fff'; ctx.font='14px sans-serif'; ctx.fillText(cap, 16, H-10); }
+
+  // Coach: explain a rule event (penalty/foul/card/corner/goal) for ~7s
+  const COACH = g.coach || [];
+  let ce = null; for(const c of COACH){ if(c[0]<=at && at-c[0]<7) ce=c; else if(c[0]>at) break; }
+  if(ce){
+    const key = gi+':'+ce[0];
+    if(key !== lastCoachKey){ lastCoachKey = key; if(ce[3]) playClip(ce[3]); }
+    ctx.font='13px sans-serif';
+    const words=('Coach: '+ce[2].replace(/^[A-Z][a-z]+: /,'')).split(' ');
+    let lines=[], ln=''; for(const w of words){ if(ctx.measureText(ln+' '+w).width>W-150){lines.push(ln);ln=w;} else ln=(ln?ln+' '+w:w);} if(ln)lines.push(ln);
+    lines=lines.slice(0,3);
+    const ph=18+lines.length*18, py=H-40-ph;
+    ctx.fillStyle='rgba(10,25,15,0.92)'; ctx.fillRect(0,py,W,ph);
+    ctx.fillStyle='#ffd400'; ctx.fillRect(0,py,4,ph);
+    ctx.fillStyle='#ffd400'; ctx.font='bold 12px sans-serif'; ctx.fillText('COACH', 14, py+15);
+    ctx.fillStyle='#eef'; ctx.font='13px sans-serif';
+    lines.forEach((l,li)=>ctx.fillText(l, 72, py+15+li*18));
+  }
   requestAnimationFrame(draw);
 }
 if(D.games[0].frames.length) requestAnimationFrame(draw); else pitch();
@@ -349,6 +367,7 @@ def build_broadcast(bdata, speed=1.4, home_color="#4da6ff", away_color="#ff8c42"
         "hc": gd.get("home_color", "#4da6ff"), "hn": gd.get("home_num", "#fff"),
         "ac": gd.get("away_color", "#ff8c42"), "an": gd.get("away_num", "#111"),
         "narration": gd.get("narration", ""), "audio": gd.get("audio"),
+        "coach": gd.get("coach", []),
         "captions": gd["captions"],
         "frames": [{"t": fr.t, "b": list(fr.ball) if fr.ball else None,
                     "h": [list(p) if p else None for p in fr.home],
