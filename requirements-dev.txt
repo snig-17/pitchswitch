@@ -1,0 +1,9 @@
+# Local development: rebuild the broadcast cache + run accuracy calibration.
+-r requirements.txt
+statsbombpy>=1.19.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+mplsoccer>=1.4.0
+# IBM Docling grounds Granite narration (heavy ML deps). Optional — grounding
+# falls back to plain-markdown parsing if absent.
+docling>=2.0.0

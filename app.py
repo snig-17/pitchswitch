@@ -104,8 +104,17 @@ if start and not st.session_state.running:
                 st.session_state.broadcast_error = ""
                 cache_file.write_text(json.dumps({"html": html, "schedule": sched}))
             except Exception as exc:
-                st.session_state.broadcast_error = str(exc)
-                st.session_state.broadcast_html = ""
+                # Hosted/no-Ollama fallback: serve a pre-built default broadcast
+                # so the demo always works even when live build isn't possible.
+                default = cache_dir / f"broadcast_{hashlib.md5(b'').hexdigest()[:10]}.json"
+                if default.exists():
+                    cached = json.loads(default.read_text())
+                    st.session_state.broadcast_html = cached["html"]
+                    st.session_state.schedule = [tuple(s) for s in cached["schedule"]]
+                    st.session_state.broadcast_error = ""
+                else:
+                    st.session_state.broadcast_error = str(exc)
+                    st.session_state.broadcast_html = ""
     st.session_state.matches_loaded = True
     st.session_state.running = True
     st.rerun()

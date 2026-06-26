@@ -15,4 +15,6 @@ data/*.json
 data/metrica/*.csv
 
 # Cached pre-built broadcasts
-data/cache/
+# data/cache/ is committed: pre-built self-contained broadcasts so the
+# deployed app runs without Ollama/Metrica data. Rebuild with
+# scripts/prebuild_cache.py.
