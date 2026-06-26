@@ -186,6 +186,10 @@ app then loads each broadcast in ~1s.
 
 The visual language (broadcast control-room theme, tokens, type, component vocabulary) is documented in [DESIGN.md](DESIGN.md).
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the build history.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Third-party open data (StatsBomb, Metrica Sports) is under its own respective terms.
