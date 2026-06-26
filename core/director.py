@@ -216,10 +216,16 @@ class Director:
                 # Granite — a single slow call shouldn't kill it for the session.
                 return
 
-            # Parse: Granite should name which match to watch
-            chosen_mid = top_matches[0][0]  # default to highest danger
-            chosen_heat = top_matches[0][1]
-            for mid, heat, danger in top_matches:
+            # Only let Granite pick a genuinely switch-worthy match. Matches
+            # are passed in for context, but switching the viewer to a cold
+            # match just because the model named it would be wrong.
+            candidates = [(mid, heat, d) for mid, heat, d in top_matches
+                          if d >= MIN_SWITCH_DANGER] or top_matches
+
+            # Parse: Granite should name which candidate to watch
+            chosen_mid = candidates[0][0]  # default to highest danger
+            chosen_heat = candidates[0][1]
+            for mid, heat, danger in candidates:
                 if (heat.home_team.lower() in response.lower() or
                         heat.away_team.lower() in response.lower()):
                     chosen_mid = mid

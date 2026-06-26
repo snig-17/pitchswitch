@@ -184,46 +184,72 @@ def process_tick():
 
         # --- Demo: forced Granite showdown -------------------------------
         # Set up a near-tie between two matches so the Director's ambiguous
-        # (Granite) tier fires. We avoid the favourite team so the danger
-        # bias can't break the tie past AMBIGUITY_THRESHOLD.
+        # (Granite) tier fires. We exclude the match the viewer is already on
+        # (so the switch is visible) and prefer non-favourite matches; the
+        # danger values below are bias-compensated so the 1.3x favourite bias
+        # can't break the tie past AMBIGUITY_THRESHOLD even if a favourite
+        # ends up pinned.
+        def _is_fav(h):
+            f = director.favourite_team.strip().lower()
+            return bool(f) and (f in h.home_team.lower() or f in h.away_team.lower())
+
         if st.session_state.force_showdown:
             st.session_state.force_showdown = False
-            fav_l = fav.strip().lower()
 
-            def _is_fav(h):
-                return bool(fav_l) and (fav_l in h.home_team.lower() or
-                                         fav_l in h.away_team.lower())
-
+            cur = st.session_state.current_match
             active = [info.match_id for events, info in st.session_state.match_data
                       if st.session_state.event_idx[info.match_id] < len(events)]
-            # Prefer two active, non-favourite matches; fall back as needed.
-            pool = [m for m in active if not _is_fav(st.session_state.heats[m])]
-            if len(pool) < 2:
-                pool = active or list(st.session_state.heats)
-            chosen = pool[:2]
+
+            def _pool(allow_fav, allow_cur):
+                return [m for m in active
+                        if (allow_cur or m != cur)
+                        and (allow_fav or not _is_fav(st.session_state.heats[m]))]
+
+            # Priority: exclude current AND favourite; relax favourite before
+            # current (a visible switch matters more than a clean tie, which
+            # bias-compensation already protects); finally fall back to any.
+            chosen = []
+            for allow_fav, allow_cur in [(False, False), (True, False),
+                                          (False, True), (True, True)]:
+                pool = _pool(allow_fav, allow_cur)
+                if len(pool) >= 2:
+                    chosen = pool[:2]
+                    break
+            if len(chosen) < 2:
+                chosen = (active or list(st.session_state.heats))[:2]
+
             if len(chosen) == 2:
                 st.session_state.showdown_mids = tuple(chosen)
-                # Hold long enough that the async Granite re-pick (a few
-                # seconds out) lands well inside the window and stays visible.
-                st.session_state.showdown_ttl = 40
-                # Start the viewer on a different match so a switch is visible.
+                # Hold long enough that even a slow async Granite re-pick
+                # (~10s) lands well inside the window and the near-tie stays
+                # visible afterwards (~0.22s/tick).
+                st.session_state.showdown_ttl = 90
+                # Start the viewer on a match outside the pinned pair so the
+                # switch is visible (falls back to a pinned one only if there
+                # is no other match at all).
                 others = [m for m in st.session_state.heats if m not in chosen]
-                if others:
-                    st.session_state.current_match = others[0]
-                    director.current_match_id = others[0]
+                start_on = others[0] if others else chosen[0]
+                st.session_state.current_match = start_on
+                director.current_match_id = start_on
                 # Bypass the Granite cooldown for the demo.
                 director._last_granite_time = -1e9
                 director._granite_inflight = False
 
         # Hold the near-tie for a few ticks so the async Granite re-pick has
-        # consistent state to read and time to land in the UI.
+        # consistent state to read and time to land in the UI. Bias-compensate
+        # so a pinned favourite still lands at the intended biased danger.
         if st.session_state.showdown_ttl > 0 and st.session_state.showdown_mids:
             a, b = st.session_state.showdown_mids
-            ha, hb = st.session_state.heats[a], st.session_state.heats[b]
-            ha.danger, ha.should_switch, ha.about_to_ignite = 0.66, True, True
-            ha.switch_reason = "Danger critical - end-to-end action"
-            hb.danger, hb.should_switch, hb.about_to_ignite = 0.58, True, True
-            hb.switch_reason = "Danger critical - late surge"
+            for mid, target, reason in (
+                (a, 0.66, "Danger critical - end-to-end action"),
+                (b, 0.58, "Danger critical - late surge"),
+            ):
+                h = st.session_state.heats[mid]
+                raw = target
+                if _is_fav(h) and director.fav_bias:
+                    raw = min(target / director.fav_bias, 1.0)
+                h.danger, h.should_switch, h.about_to_ignite = raw, True, True
+                h.switch_reason = reason
             # Damp every other match (incl. a biased favourite) so the pinned
             # pair is unambiguously the top two and the tie can't be broken.
             for omid, oheat in st.session_state.heats.items():
