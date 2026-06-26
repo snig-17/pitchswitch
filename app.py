@@ -16,6 +16,18 @@ st.set_page_config(
     layout="wide",
 )
 
+# Broadcast-style display type: Oswald (the condensed face used in sports
+# lower-thirds) for headings, so the title reads like a broadcast graphic
+# instead of the default Streamlit sans.
+st.markdown(
+    "<style>"
+    "@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap');"
+    "h1,h2,h3{font-family:'Oswald',sans-serif!important;letter-spacing:.5px;text-transform:uppercase;}"
+    "h1{font-weight:700!important;}"
+    "</style>",
+    unsafe_allow_html=True,
+)
+
 # ---------------------------------------------------------------------------
 # Session state init
 # ---------------------------------------------------------------------------
