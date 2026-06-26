@@ -1,0 +1,11 @@
+# Broadcast control-room theme: the app chrome matches the dark pitch feed so
+# the canvas blends into the page instead of floating in light-grey Streamlit.
+[theme]
+base = "dark"
+primaryColor = "#ff3b3b"             # danger / ON AIR red, used in the feed
+backgroundColor = "#0d1f12"          # near-black pitch (matches canvas outer)
+secondaryBackgroundColor = "#15311a" # pitch green (sidebar + widgets)
+textColor = "#e8efe9"
+
+[client]
+toolbarMode = "minimal"              # hide Deploy button + dev chrome
