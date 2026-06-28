@@ -46,3 +46,34 @@ def test_build_broadcast_tolerates_missing_captions():
     }
     html = build_broadcast(bd)
     assert "bc" in html  # canvas id present — it rendered
+
+
+def test_build_broadcast_embeds_goals_and_overlay():
+    # A goal in the data must be embedded, and the template must carry the big
+    # GOAL overlay that renders it on screen.
+    bd = {
+        "games": [{
+            "label": "A vs B", "home": "A", "away": "B",
+            "narration": "go", "danger": [0.1], "captions": [], "coach": [],
+            "goals": [[12.0, "h"]],
+            "frames": [Frame(t=0.0, ball=(0.5, 0.5), home=[], away=[])],
+        }],
+        "schedule": [[0.0, 0]],
+    }
+    html = build_broadcast(bd)
+    assert '[12.0, "h"]' in html        # goal data embedded
+    assert "GOAL" in html               # overlay text present in the template
+
+
+def test_build_broadcast_tolerates_missing_goals():
+    # A game dict without a 'goals' key must build (gd.get default), not KeyError.
+    bd = {
+        "games": [{
+            "label": "A vs B", "home": "A", "away": "B",
+            "narration": "go", "danger": [0.1], "captions": [], "coach": [],
+            "frames": [Frame(t=0.0, ball=(0.5, 0.5), home=[], away=[])],
+        }],
+        "schedule": [[0.0, 0]],
+    }
+    html = build_broadcast(bd)
+    assert "bc" in html
