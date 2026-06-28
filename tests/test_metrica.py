@@ -1,6 +1,6 @@
 """Metrica tracking helpers: per-frame danger proxy + jersey parsing."""
 
-from core.metrica import Frame, frame_danger, _jersey
+from core.metrica import Frame, frame_danger, _jersey, _narrate
 
 
 def _frame(ball, home=None, away=None):
@@ -44,3 +44,18 @@ def test_danger_never_exceeds_one():
 def test_jersey_parsing():
     assert _jersey("Player11") == "11"
     assert _jersey("Ball") == "?"
+
+
+class _RaisingProvider:
+    """A warm provider whose generate() raises (timeout, connection drop)."""
+    def is_warm(self):
+        return True
+
+    def generate(self, *a, **k):
+        raise RuntimeError("llm down")
+
+
+def test_narrate_degrades_to_template_when_provider_raises():
+    # A raising LLM must not propagate — narration degrades to the template call.
+    out = _narrate("France", "Argentina", 0.8, "", None, _RaisingProvider())
+    assert "Cut to France vs Argentina" in out

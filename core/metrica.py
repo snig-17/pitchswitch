@@ -162,7 +162,15 @@ def _narrate(home, away, danger, favourite, grounding, provider):
             f"({danger:.2f}). Make it vivid using this context:\n{facts}\n"
             "Start with 'Switch to' or 'Get to'."
         )
-        out = provider.generate(prompt, max_tokens=55)
+        try:
+            out = provider.generate(prompt, max_tokens=55)
+        except Exception as exc:
+            # Degrade to the template switch call, but log so a real
+            # signature/programming error doesn't silently serve fallback forever.
+            import sys
+            print(f"Narration: Granite call failed ({exc!r}); using template",
+                  file=sys.stderr)
+            out = None
         if out:
             return prefix + out.strip()
     return f"{prefix}Cut to {home} vs {away} — a dangerous attack is building!"

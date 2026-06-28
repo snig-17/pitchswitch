@@ -6,6 +6,7 @@ Run: streamlit run app.py
 import streamlit as st
 import streamlit.components.v1 as components
 
+from core.cache import load_cached_broadcast
 from core.livefeed import build_broadcast as broadcast_canvas
 from core.metrica import build_unified_broadcast as assemble_unified
 from providers.tts import get_tts
@@ -79,12 +80,11 @@ if start and not st.session_state.running:
     key = hashlib.md5(f"{favourite_team.lower()}".encode()).hexdigest()[:10]
     cache_file = cache_dir / f"broadcast_{key}.json"
 
-    if cache_file.exists():
+    cached = load_cached_broadcast(cache_file) if cache_file.exists() else None
+    if cached is not None:
         # Instant: reuse a previously built broadcast for these favourites.
         with st.spinner("Loading broadcast..."):
-            cached = json.loads(cache_file.read_text())
-            st.session_state.broadcast_html = cached["html"]
-            st.session_state.schedule = [tuple(s) for s in cached["schedule"]]
+            st.session_state.broadcast_html, st.session_state.schedule = cached
             st.session_state.broadcast_error = ""
     else:
         with st.spinner("Warming Granite + Docling, building the broadcast "
@@ -102,17 +102,19 @@ if start and not st.session_state.running:
                 st.session_state.schedule = sched
                 st.session_state.broadcast_error = ""
                 cache_file.write_text(json.dumps({"html": html, "schedule": sched}))
-            except Exception as exc:
+            except Exception:
                 # Hosted/no-Ollama fallback: serve a pre-built default broadcast
                 # so the demo always works even when live build isn't possible.
+                import traceback
+                traceback.print_exc()   # full detail to server logs, not the UI
                 default = cache_dir / f"broadcast_{hashlib.md5(b'').hexdigest()[:10]}.json"
-                if default.exists():
-                    cached = json.loads(default.read_text())
-                    st.session_state.broadcast_html = cached["html"]
-                    st.session_state.schedule = [tuple(s) for s in cached["schedule"]]
+                fallback = load_cached_broadcast(default)
+                if fallback is not None:
+                    st.session_state.broadcast_html, st.session_state.schedule = fallback
                     st.session_state.broadcast_error = ""
                 else:
-                    st.session_state.broadcast_error = str(exc)
+                    st.session_state.broadcast_error = (
+                        "Could not build or load a broadcast — check the server logs.")
                     st.session_state.broadcast_html = ""
     st.session_state.matches_loaded = True
     st.session_state.running = True

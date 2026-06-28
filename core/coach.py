@@ -116,7 +116,15 @@ def explain(category: str, provider=None) -> str:
             f"{category} is, grounded in this rule:\n{law}\n"
             "Keep it plain and concrete. No preamble."
         )
-        out = provider.generate(prompt, max_tokens=70)
+        try:
+            out = provider.generate(prompt, max_tokens=70)
+        except Exception as exc:
+            # Degrade to the vetted canonical sentence, but log so a real
+            # signature/programming error doesn't silently serve fallback forever.
+            import sys
+            print(f"Coach: Granite call failed ({exc!r}); using canonical fallback",
+                  file=sys.stderr)
+            out = None
         if out and len(out.strip()) > 20:
             return out.strip()
     return CANONICAL[category]
