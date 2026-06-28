@@ -3,6 +3,8 @@
 Run: streamlit run app.py
 """
 
+from pathlib import Path
+
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -11,9 +13,12 @@ from core.livefeed import build_broadcast as broadcast_canvas
 from core.metrica import build_unified_broadcast as assemble_unified
 from providers.tts import get_tts
 
+# Favicon: the PitchSwitch mark. Fall back to an emoji if the asset is missing
+# (e.g. a slimmed deploy that drops brand/), so the page still loads.
+_ICON = Path(__file__).parent / "brand" / "pitchswitch-icon-256.png"
 st.set_page_config(
     page_title="PitchSwitch",
-    page_icon="",
+    page_icon=str(_ICON) if _ICON.exists() else "⚽",
     layout="wide",
 )
 

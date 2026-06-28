@@ -1,0 +1,78 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="PitchSwitch">
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&amp;display=swap');</style>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#15311a"/>
+      <stop offset="1" stop-color="#0d1f12"/>
+    </linearGradient>
+    <linearGradient id="pitch" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#173a20"/>
+      <stop offset="1" stop-color="#0d1f12"/>
+    </linearGradient>
+    <radialGradient id="danger" cx="86%" cy="78%" r="55%">
+      <stop offset="0" stop-color="#ff3b3b" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#ff3b3b" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vigB" cx="50%" cy="46%" r="75%">
+      <stop offset="55%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.5"/>
+    </radialGradient>
+    <radialGradient id="vig" cx="50%" cy="42%" r="72%">
+      <stop offset="52%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.5"/>
+    </radialGradient>
+    <filter id="redglow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="goldglow" x="-150%" y="-150%" width="400%" height="400%">
+      <feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="tile"><rect x="0" y="0" width="512" height="512" rx="116"/></clipPath>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="1280" height="640" fill="url(#bg)"/>
+  <g>
+    <rect x="0"    y="0" width="160" height="640" fill="#ffffff" opacity="0.02"/>
+    <rect x="320"  y="0" width="160" height="640" fill="#ffffff" opacity="0.02"/>
+    <rect x="640"  y="0" width="160" height="640" fill="#ffffff" opacity="0.02"/>
+    <rect x="960"  y="0" width="160" height="640" fill="#ffffff" opacity="0.02"/>
+    <rect x="160"  y="0" width="160" height="640" fill="#000000" opacity="0.05"/>
+    <rect x="480"  y="0" width="160" height="640" fill="#000000" opacity="0.05"/>
+    <rect x="800"  y="0" width="160" height="640" fill="#000000" opacity="0.05"/>
+    <rect x="1120" y="0" width="160" height="640" fill="#000000" opacity="0.05"/>
+  </g>
+  <rect x="0" y="0" width="1280" height="640" fill="url(#danger)"/>
+  <rect x="0" y="0" width="1280" height="640" fill="url(#vigB)"/>
+
+  <!-- icon -->
+  <g transform="translate(312,150) scale(0.66)">
+    <rect x="0" y="0" width="512" height="512" rx="116" fill="url(#pitch)"/>
+    <g clip-path="url(#tile)">
+      <rect x="0" y="0" width="86" height="512" fill="#ffffff" opacity="0.022"/>
+      <rect x="171" y="0" width="86" height="512" fill="#ffffff" opacity="0.022"/>
+      <rect x="342" y="0" width="86" height="512" fill="#ffffff" opacity="0.022"/>
+      <rect x="86" y="0" width="85" height="512" fill="#000000" opacity="0.05"/>
+      <rect x="257" y="0" width="85" height="512" fill="#000000" opacity="0.05"/>
+      <rect x="428" y="0" width="84" height="512" fill="#000000" opacity="0.05"/>
+      <line x1="256" y1="40" x2="256" y2="472" stroke="#cfe8d0" stroke-width="3" opacity="0.10"/>
+      <circle cx="256" cy="256" r="150" fill="none" stroke="#cfe8d0" stroke-width="6" opacity="0.10"/>
+      <rect x="0" y="0" width="512" height="512" fill="url(#vig)"/>
+    </g>
+    <g fill="#ff3b3b" filter="url(#redglow)">
+      <polygon points="146,170 146,342 240,256"/>
+      <polygon points="240,170 240,342 334,256"/>
+      <rect x="344" y="170" width="28" height="172" rx="6"/>
+    </g>
+    <circle cx="410" cy="104" r="13" fill="#ffd400" filter="url(#goldglow)"/>
+  </g>
+
+  <!-- wordmark + tagline, centred under the icon -->
+  <text x="640" y="490" text-anchor="middle" font-family="Oswald, 'Arial Narrow', sans-serif"
+        font-weight="700" font-size="132" letter-spacing="1" style="text-transform:uppercase">
+    <tspan fill="#e8efe9">P</tspan><tspan fill="#ff3b3b">I</tspan><tspan fill="#e8efe9">TCHSWITCH</tspan>
+  </text>
+  <text x="640" y="548" text-anchor="middle" font-family="Oswald, 'Arial Narrow', sans-serif"
+        font-weight="600" font-size="32" letter-spacing="6" fill="#9fb0c4"
+        style="text-transform:uppercase">Cut to the goal &#8212; before it happens</text>
+</svg>
