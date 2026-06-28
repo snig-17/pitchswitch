@@ -4,6 +4,31 @@ All notable changes to PitchSwitch are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); this project is a hackathon
 submission, so versions are milestones rather than published releases.
 
+## [0.1.1] — 2026-06-28
+
+Post-submission hardening of the live broadcast path. No change to what the demo
+shows; it just fails more gracefully and carries a regression net.
+
+### Changed
+- A corrupt, unreadable, or malformed broadcast cache now degrades to the default
+  broadcast instead of surfacing a stack trace — the loader (`core/cache.py`)
+  validates both the top-level shape and every schedule row, and the on-screen
+  error is generic (full detail goes to the server log, not the UI).
+
+### Fixed
+- Coach and switch-narration now fall back to their vetted canonical/template text
+  if IBM Granite raises (timeout, dropped connection) mid-call, instead of letting
+  the exception propagate. Locked with regression tests.
+
+### Removed
+- Dead canvas builders and their templates (`build_feed`, `build_tracking_feed`,
+  `build_audio_player`) that the earlier cleanup missed — only `build_broadcast` is
+  wired into the app. Closes a latent script-context-breakout path by deletion.
+
+### Tests
+- Added `tests/test_livefeed.py` (script-escaping) plus regression tests for the
+  Coach and narration LLM-failure fallbacks — suite now 23 green.
+
 ## [0.1.0] — 2026-06-26
 
 First complete, hosted submission for the IBM SkillsBuild AI Builders Challenge.

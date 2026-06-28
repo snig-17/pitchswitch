@@ -29,6 +29,21 @@ def test_explain_unknown_category_is_empty():
     assert explain("offside", provider=None) == ""
 
 
+class _RaisingProvider:
+    """A warm provider whose generate() blows up (timeout, connection drop)."""
+    def is_warm(self):
+        return True
+
+    def generate(self, *a, **k):
+        raise RuntimeError("llm down")
+
+
+def test_explain_degrades_to_canonical_when_provider_raises():
+    # A raising LLM must not propagate — Coach degrades to the vetted sentence.
+    for cat in CANONICAL:
+        assert explain(cat, provider=_RaisingProvider()) == CANONICAL[cat]
+
+
 def test_every_canonical_has_a_law_reference():
     # Each explainable category cites a Law of the Game.
     for cat in CANONICAL:
