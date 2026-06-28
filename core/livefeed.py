@@ -49,14 +49,23 @@ const G0 = D.games[0].frames, START = G0.length ? G0[0].t : 0;
 const ENDt = G0.length ? G0[G0.length-1].t : 1;
 
 function pitch(){
-  ctx.fillStyle='#15311a'; ctx.fillRect(0,0,W,H);
-  for(let s=0;s<6;s++){if(s%2){ctx.fillStyle='rgba(255,255,255,0.025)';ctx.fillRect(s*W/6,0,W/6,H);}}
-  ctx.strokeStyle='#cfe8d0'; ctx.lineWidth=2; ctx.globalAlpha=0.9;
-  ctx.strokeRect(6,6,W-12,H-12);
-  ctx.beginPath(); ctx.moveTo(W/2,6); ctx.lineTo(W/2,H-6); ctx.stroke();
-  ctx.beginPath(); ctx.arc(W/2,H/2,60,0,7); ctx.stroke();
-  const y1=0.21*H,y2=0.79*H; ctx.strokeRect(6,y1,0.16*W,y2-y1); ctx.strokeRect(W-6-0.16*W,y1,0.16*W,y2-y1);
-  ctx.globalAlpha=1;
+  ctx.fillStyle='#143016'; ctx.fillRect(0,0,W,H);
+  // vertical mowing stripes: alternating light/dark bands (broadcast turf look)
+  const NB=12, bw=W/NB;
+  for(let s=0;s<NB;s++){ ctx.fillStyle = s%2 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.05)'; ctx.fillRect(s*bw,0,bw,H); }
+  ctx.strokeStyle='rgba(207,232,208,0.5)'; ctx.lineWidth=2; ctx.globalAlpha=1;
+  ctx.strokeRect(8,8,W-16,H-16);
+  ctx.beginPath(); ctx.moveTo(W/2,8); ctx.lineTo(W/2,H-8); ctx.stroke();
+  ctx.beginPath(); ctx.arc(W/2,H/2,58,0,7); ctx.stroke();
+  ctx.fillStyle='rgba(207,232,208,0.6)'; ctx.beginPath(); ctx.arc(W/2,H/2,3,0,7); ctx.fill();
+  const y1=0.22*H,y2=0.78*H, bxw=0.15*W;
+  ctx.strokeRect(8,y1,bxw,y2-y1); ctx.strokeRect(W-8-bxw,y1,bxw,y2-y1);
+  const gy1=0.43*H,gy2=0.57*H;                       // goal mouths at each end
+  ctx.strokeRect(2,gy1,6,gy2-gy1); ctx.strokeRect(W-8,gy1,6,gy2-gy1);
+  // vignette: darken the edges so the feed reads like a broadcast, not a diagram
+  const vg=ctx.createRadialGradient(W/2,H*0.46,H*0.34,W/2,H*0.5,W*0.62);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.45)');
+  ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
 }
 function avatar(x,y,shirt,num,numCol){
   ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(x,y+12,8,2.6,0,0,7); ctx.fill();
@@ -115,8 +124,10 @@ function draw(now){
   const mm=Math.floor(at/60), ss=Math.floor(at%60);
   ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.fillText(g.label+'  \\u25b6 LIVE', 16, 26);
   ctx.fillStyle='#bcd'; ctx.font='13px sans-serif'; ctx.fillText(mm+':'+(ss<10?'0':'')+ss, 16, 46);
-  ctx.fillStyle=g.hc; ctx.fillText('\\u25cf '+g.home, 16, H-44);
-  ctx.fillStyle=g.ac; ctx.fillText('\\u25cf '+g.away, 26+ctx.measureText('\\u25cf '+g.home).width+18, H-44);
+  let sh=0,sa=0; for(const ev of (g.goals||[])){ if(ev[0]<=at){ if(ev[1]==='a') sa++; else sh++; } }
+  ctx.fillStyle=g.hc; ctx.fillText('\\u25cf '+g.home+'  '+sh, 16, H-44);
+  ctx.fillStyle=g.ac; const hw=ctx.measureText('\\u25cf '+g.home+'  '+sh).width;
+  ctx.fillText('\\u25cf '+g.away+'  '+sa, 26+hw+18, H-44);
 
   // Director danger comparison (top-right): one bar per match so the viewer
   // sees the matches competing for the cut in real time. This is the "why"
@@ -181,6 +192,23 @@ function draw(now){
     ctx.fillStyle='#eef'; ctx.font='13px sans-serif';
     lines.forEach((l,li)=>ctx.fillText(l, 72, py+15+li*18));
   }
+
+  // big GOAL overlay (gold slam + red flash, like the launch video) when the
+  // on-air match scores — held ~2.6s after the goal time
+  const GOALS = g.goals || [];
+  let gt=null; for(const ev of GOALS){ if(ev[0]<=at && at-ev[0]<2.6) gt=ev[0]; }
+  if(gt!==null){
+    const p = at - gt;
+    if(p<0.3){ ctx.fillStyle='rgba(255,59,59,'+(0.45*(1-p/0.3)).toFixed(3)+')'; ctx.fillRect(0,0,W,H); }
+    const sc = p<0.3 ? 1.5-0.5*(p/0.3) : 1;                 // scale-in 1.5 -> 1
+    const al = p<0.3 ? p/0.3 : (p>2.1 ? Math.max(0,(2.6-p)/0.5) : 1);
+    ctx.save(); ctx.globalAlpha=al; ctx.translate(W/2,H/2); ctx.scale(sc,sc);
+    ctx.fillStyle='#ffd400'; ctx.font='bold 110px sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.shadowColor='rgba(255,212,0,0.55)'; ctx.shadowBlur=28;
+    ctx.fillText('GOAL', 0, 0);
+    ctx.shadowBlur=0; ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.restore();
+  }
   requestAnimationFrame(draw);
 }
 if(D.games[0].frames.length) requestAnimationFrame(draw); else pitch();
@@ -199,7 +227,7 @@ def build_broadcast(bdata, speed=1.4, home_color="#4da6ff", away_color="#ff8c42"
         "hc": gd.get("home_color", "#4da6ff"), "hn": gd.get("home_num", "#fff"),
         "ac": gd.get("away_color", "#ff8c42"), "an": gd.get("away_num", "#111"),
         "narration": gd.get("narration", ""), "audio": gd.get("audio"),
-        "coach": gd.get("coach", []),
+        "coach": gd.get("coach", []), "goals": gd.get("goals", []),
         "danger": [round(d, 3) for d in gd.get("danger", [])],
         "captions": gd.get("captions", []),
         "frames": [{"t": fr.t, "b": list(fr.ball) if fr.ball else None,

@@ -1,0 +1,25 @@
+PitchSwitch — the AI that cuts you to the goal BEFORE it happens ⚽️
+
+You picked a game. It's nil–nil, going nowhere... and the other match just erupted. In the World Cup group stage, both games in a group kick off at the exact same minute — and you can only watch one screen. Pick wrong and you miss the moment that flips the entire group.
+
+PitchSwitch fixes that. It watches every simultaneous match at once, gives each one a live "danger" score from the play-by-play (balls into the final third, pressure in the box, shots, corners, penalties), and — crucially — tracks how fast that danger is RISING. The moment one match is about to boil over, the Director cuts your feed to it and shows you exactly WHY: an on-screen danger bar for each game and the differential that triggered the switch.
+
+On our test matches it flagged goals with about 70 seconds of warning on average. So you're already watching the right game when the net ripples.
+
+Like NFL RedZone — but for soccer, and it gets you there before the goal instead of after.
+
+Under the hood, three IBM technologies:
+• Granite — calls every switch out loud in a line a real TV presenter would say, grounded in team context
+• Docling — parses the team primers and the Laws of the Game that ground the narration and the "Coach" explainer
+• Watson Text to Speech — the spoken British-commentator voice
+
+It also leans the switching toward YOUR teams — including the small nations broadcasters ignore.
+
+Built for World Cup 2026.
+
+▶ Live demo: https://pitchswitch-g5cvhbdq89gvdfxmb4awmn.streamlit.app
+💻 Code: https://github.com/snig-17/pitchswitch
+
+The live feed shown here runs over real open tracking data (Metrica), mapped to World Cup fixtures — a stand-in for a licensed broadcast feed.
+
+#WorldCup #WorldCup2026 #Soccer #Football #AI #IBMGranite #SportsTech #MachineLearning #RedZone #Watson

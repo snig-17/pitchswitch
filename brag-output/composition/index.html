@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <title>PitchSwitch — brag</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+      :root {
+        --pitch-black: #0d1f12; --pitch-green: #15311a; --pitch-line: #cfe8d0;
+        --red: #ff3b3b; --gold: #ffd400; --text: #e8efe9; --amber: #ffe08a;
+        --muted: #9fb0c4; --header-green: #9fdcae; --ramp-blue: #4da6ff; --ramp-yellow: #ffcc00;
+      }
+      #root { position: relative; width: 1920px; height: 1080px; overflow: hidden;
+        font-family: system-ui, sans-serif; color: var(--text); }
+      .display { font-family: "Oswald", system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.5px; }
+      .scene { position: absolute; inset: 0; }
+
+      /* ---------- BG ---------- */
+      #bg { background: var(--pitch-black); }
+      #bg .stripes { position: absolute; inset: 0;
+        background: repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0 110px, rgba(255,255,255,0) 110px 220px); }
+      #bg .vignette { position: absolute; inset: 0;
+        background: radial-gradient(120% 90% at 50% 42%, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%); }
+
+      /* ---------- pitch + players ---------- */
+      .pitch { position: absolute; inset: 0; overflow: hidden; }
+      .turf { position: absolute; inset: 0; background: #143016; }
+      .turf .mow { position: absolute; inset: 0;
+        background: repeating-linear-gradient(90deg, rgba(255,255,255,0.035) 0 160px, rgba(0,0,0,0.05) 160px 320px); }
+      .pitch .pvig { position: absolute; inset: 0;
+        background: radial-gradient(130% 100% at 50% 45%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 100%); }
+      .ln { position: absolute; border: 2px solid rgba(207,232,208,0.5); box-sizing: border-box; }
+      .half { left: 959px; top: 120px; width: 0; height: 840px; border-width: 0 0 0 2px; }
+      .circle { left: 850px; top: 430px; width: 220px; height: 220px; border-radius: 50%; }
+      .spot { left: 956px; top: 536px; width: 8px; height: 8px; border-radius: 50%;
+        background: rgba(207,232,208,0.6); border: 0; }
+      .boxL { left: 60px; top: 360px; width: 240px; height: 360px; }
+      .boxR { left: 1620px; top: 360px; width: 240px; height: 360px; }
+      .goalL { left: 44px; top: 480px; width: 26px; height: 120px; border-color: rgba(207,232,208,0.85); }
+      .goalR { left: 1850px; top: 480px; width: 26px; height: 120px; border-color: rgba(207,232,208,0.85); }
+      /* app-style jersey avatars: shadow + head + numbered shirt + shorts */
+      .player { position: absolute; width: 38px; height: 48px; will-change: transform; }
+      .player .shadow { position: absolute; left: 5px; bottom: 1px; width: 28px; height: 8px;
+        border-radius: 50%; background: rgba(0,0,0,0.38); }
+      .player .head { position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+        width: 13px; height: 13px; border-radius: 50%; background: #f0c8a0;
+        box-shadow: 0 1px 0 rgba(0,0,0,0.18); z-index: 3; }
+      .player .torso { position: absolute; left: 50%; top: 9px; transform: translateX(-50%);
+        width: 32px; height: 25px; border-radius: 10px 10px 6px 6px;
+        border: 1px solid rgba(0,0,0,0.28); z-index: 1; }
+      .player .shorts { position: absolute; left: 50%; top: 30px; transform: translateX(-50%);
+        width: 22px; height: 10px; border-radius: 3px; background: #26324a; z-index: 1; }
+      .player .num { position: absolute; left: 0; right: 0; top: 14px; text-align: center;
+        font-family: system-ui, sans-serif; font-size: 12px; font-weight: 700; z-index: 2; }
+      .ball { position: absolute; width: 18px; height: 18px; border-radius: 50%;
+        background: #fff; border: 2px solid #111; box-shadow: 0 5px 9px rgba(0,0,0,0.55); will-change: transform; }
+
+      /* ---------- broadcast chrome ---------- */
+      .scorebug { position: absolute; top: 54px; left: 60px; display: flex; align-items: center; gap: 16px;
+        background: rgba(8,20,12,0.85); border-left: 5px solid var(--red); padding: 12px 20px; }
+      .scorebug .kit { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.7); }
+      .scorebug .match { font-weight: 600; font-size: 28px; letter-spacing: 1px; }
+      .scorebug .score { font-weight: 700; font-size: 30px; color: var(--gold); font-variant-numeric: tabular-nums; }
+      .scorebug .live { font-weight: 700; font-size: 18px; color: var(--red); display: flex; align-items: center; gap: 7px; }
+      .scorebug .live .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--red);
+        box-shadow: 0 0 14px rgba(255,59,59,0.9); }
+      .scorebug .clock { font-weight: 600; font-size: 24px; color: var(--muted); }
+
+      .panel { position: absolute; top: 54px; right: 60px; width: 530px;
+        background: rgba(8,20,12,0.88); border: 1px solid rgba(159,220,174,0.18); padding: 20px 22px 24px; }
+      .panel .ph { font-weight: 700; font-size: 19px; letter-spacing: 2px; color: var(--header-green); margin-bottom: 18px; }
+      .drow { margin-bottom: 18px; } .drow:last-child { margin-bottom: 0; }
+      .drow .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+      .drow .team { font-weight: 600; font-size: 22px; letter-spacing: 0.5px; color: var(--muted); }
+      .drow.on .team { color: var(--text); }
+      .drow .right { display: flex; align-items: center; gap: 12px; }
+      .drow .onair { font-weight: 700; font-size: 15px; color: var(--gold); display: flex; align-items: center; gap: 5px; opacity: 0; }
+      .drow .val { font-weight: 700; font-size: 22px; color: var(--text); font-variant-numeric: tabular-nums; }
+      .drow .track { position: relative; height: 16px; width: 100%; background: rgba(255,255,255,0.07); overflow: hidden; }
+      .drow .fill { position: absolute; left: 0; top: 0; height: 100%; width: 100%;
+        transform: scaleX(0); transform-origin: left center; background: var(--ramp-blue); }
+
+      .caption { position: absolute; left: 50%; transform: translateX(-50%); bottom: 70px;
+        background: rgba(0,0,0,0.62); padding: 12px 26px; font-weight: 600; font-size: 26px; opacity: 0; }
+      .caption .hl { color: var(--gold); }
+
+      /* danger glow (game 2) */
+      #s5 .glow { position: absolute; top: 0; right: 0; width: 50%; height: 100%;
+        background: radial-gradient(72% 64% at 80% 50%, rgba(255,59,59,0.5) 0%, rgba(255,59,59,0) 70%); opacity: 0; }
+      #s5 .flash { position: absolute; inset: 0; background: rgba(255,59,59,0.0); }
+      #s5 .goalmsg { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; }
+      #s5 .goalmsg .g { font-weight: 700; font-size: 320px; color: var(--gold); letter-spacing: 6px;
+        text-shadow: 0 0 60px rgba(255,212,0,0.55); }
+
+      /* switch banner */
+      #sw .banner { position: absolute; top: 300px; left: 50%; margin-left: -600px; width: 1200px;
+        transform: scaleX(0.2); transform-origin: center; background: rgba(255,59,59,0.94);
+        padding: 26px 40px; display: flex; align-items: center; gap: 26px; opacity: 0;
+        box-shadow: 0 18px 60px rgba(0,0,0,0.5); }
+      #sw .banner .tag { font-weight: 700; font-size: 26px; color: rgba(255,255,255,0.85); letter-spacing: 2px;
+        border-right: 2px solid rgba(255,255,255,0.4); padding-right: 26px; }
+      #sw .banner .call { font-weight: 700; font-size: 48px; color: #fff; }
+      #sw .why { position: absolute; top: 446px; left: 0; right: 0; text-align: center;
+        font-weight: 600; font-size: 30px; color: var(--amber); letter-spacing: 1px; opacity: 0; }
+
+      /* ---------- S1 hook ---------- */
+      #s1 { display: grid; place-items: center; }
+      #s1 .stack { text-align: center; }
+      #s1 .line { font-weight: 700; font-size: 134px; line-height: 1.14; color: var(--text); opacity: 0; }
+      #s1 .line.kick { position: relative; display: inline-block; }
+      #s1 .kick-underline { position: absolute; left: 0; bottom: -14px; height: 10px; width: 100%;
+        background: var(--red); transform: scaleX(0); transform-origin: left center; box-shadow: 0 0 24px rgba(255,59,59,0.7); }
+
+      /* ---------- S2 turn ---------- */
+      #s2 { display: grid; place-items: center; }
+      #s2 .turn { text-align: center; }
+      #s2 .after { font-weight: 500; font-size: 56px; color: var(--muted); opacity: 0; margin-bottom: 36px; }
+      #s2 .before { font-weight: 700; font-size: 92px; color: var(--text); opacity: 0; }
+      #s2 .before .word { color: var(--red); display: inline-block; opacity: 0; text-shadow: 0 0 34px rgba(255,59,59,0.55); }
+
+      /* ---------- S6 proof ---------- */
+      #s6 { display: grid; place-items: center; }
+      #s6 .wrap { text-align: center; }
+      #s6 .num { font-weight: 700; font-size: 176px; line-height: 1.0; color: var(--text); font-variant-numeric: tabular-nums; opacity: 0; }
+      #s6 .num .u { color: var(--red); }
+      #s6 .sub { font-weight: 600; font-size: 40px; color: var(--muted); margin-top: 18px; opacity: 0; }
+      #s6 .gran { font-style: italic; font-size: 32px; color: #cfe0d4; margin-top: 40px; opacity: 0; }
+      #s6 .gran b { color: var(--gold); font-style: normal; }
+
+      /* ---------- S7 pros ---------- */
+      #s7 { display: grid; place-items: center; }
+      #s7 .prowrap { text-align: center; }
+      #s7 .pt { font-weight: 700; font-size: 32px; letter-spacing: 2px; color: var(--header-green); margin-bottom: 40px; opacity: 0; }
+      #s7 .rows { display: flex; flex-direction: column; gap: 22px; }
+      #s7 .pro { display: flex; align-items: center; gap: 22px; opacity: 0; }
+      #s7 .pro .ic { width: 16px; height: 16px; background: var(--red); border-radius: 50%; flex: 0 0 auto;
+        box-shadow: 0 0 16px rgba(255,59,59,0.6); }
+      #s7 .pro .t { font-weight: 600; font-size: 46px; color: var(--text); }
+      #s7 .pro .t b { color: var(--gold); font-weight: 700; }
+
+      /* ---------- S8 wordmark ---------- */
+      #s8 { display: grid; place-items: center; }
+      #s8 .lockup { text-align: center; }
+      #s8 .mark { font-weight: 700; font-size: 176px; letter-spacing: 1px; color: var(--text); opacity: 0; }
+      #s8 .mark .dot { color: var(--red); }
+      #s8 .tag { font-weight: 500; font-size: 44px; color: var(--muted); margin-top: 22px; opacity: 0; }
+      #s8 .rule { height: 5px; width: 380px; background: var(--red); margin: 30px auto 0;
+        transform: scaleX(0); transform-origin: center; box-shadow: 0 0 22px rgba(255,59,59,0.7); }
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-8vq2" id="root" data-composition-id="main" data-start="0" data-width="1920" data-height="1080" data-duration="30.7" data-fps="30">
+
+      <!-- constant dark bg (text scenes) -->
+      <section data-hf-id="hf-92lp" id="bg" class="scene clip" data-start="0" data-duration="30.7" data-track-index="0">
+        <div data-hf-id="hf-6l16" class="stripes"></div><div data-hf-id="hf-q7bi" class="vignette"></div>
+      </section>
+
+      <!-- S1 hook -->
+      <section data-hf-id="hf-s860" id="s1" class="scene clip" data-start="0" data-duration="3.5" data-track-index="4">
+        <div data-hf-id="hf-1b0s" class="stack display" data-layout-allow-overlap="">
+          <div data-hf-id="hf-9cx8" class="line" id="s1l1">You picked a game.</div>
+          <div data-hf-id="hf-0770" class="line" id="s1l2">Nothing's happening.</div>
+          <div data-hf-id="hf-y91m" class="line kick" id="s1l3">Still nil–nil.<span data-hf-id="hf-dsft" class="kick-underline" id="s1ul"></span></div>
+        </div>
+      </section>
+
+      <!-- S2 turn -->
+      <section data-hf-id="hf-lj7b" id="s2" class="scene clip" data-start="3.4" data-duration="3.3" data-track-index="5">
+        <div data-hf-id="hf-atuv" class="turn display">
+          <div data-hf-id="hf-pm0f" class="after" id="s2after">Then the other game erupts.</div>
+          <div data-hf-id="hf-f6tv" class="before" id="s2before">PitchSwitch gets you there — <span data-hf-id="hf-0sq3" class="word" id="s2word">before.</span></div>
+        </div>
+      </section>
+
+      <!-- S3 game 1 feed -->
+      <section data-hf-id="hf-hzke" id="s3" class="scene clip" data-start="6.6" data-duration="6.3" data-track-index="1">
+        <div data-hf-id="hf-gm2c" class="pitch" id="s3pitch"></div>
+        <div data-hf-id="hf-nha4" class="scorebug display" id="s3bug">
+          <span data-hf-id="hf-hlz1" class="kit" style="background:#4da6ff"></span>
+          <span data-hf-id="hf-dxzn" class="match">MEX <span data-hf-id="hf-fwu8" id="s3score" class="score">0–0</span> SWE</span>
+          <span data-hf-id="hf-c7ix" class="kit" style="background:#ff8c42"></span>
+          <span data-hf-id="hf-234l" class="live"><span data-hf-id="hf-9gry" class="dot"></span>LIVE</span>
+          <span data-hf-id="hf-nb5y" class="clock">61:48</span>
+        </div>
+        <div data-hf-id="hf-shoc" class="panel" id="s3panel">
+          <div data-hf-id="hf-gss3" class="ph display">Director — Live Danger</div>
+          <div data-hf-id="hf-impz" class="drow display on" id="s3rowMEX">
+            <div data-hf-id="hf-sijt" class="top"><span data-hf-id="hf-xd7z" class="team">MEX v SWE</span>
+              <span data-hf-id="hf-e6xl" class="right"><span data-hf-id="hf-cgcy" class="onair" id="s3onMEX" style="opacity:1">▶ On Air</span><span data-hf-id="hf-cmfm" class="val">0.28</span></span></div>
+            <div data-hf-id="hf-64lp" class="track"><div data-hf-id="hf-j4sl" class="fill" id="s3fillMEX" style="background:var(--ramp-blue)"></div></div>
+          </div>
+          <div data-hf-id="hf-93ie" class="drow display" id="s3rowKOR">
+            <div data-hf-id="hf-8kpp" class="top"><span data-hf-id="hf-e1vx" class="team" id="s3teamKOR">KOR v GER</span>
+              <span data-hf-id="hf-wsq5" class="right"><span data-hf-id="hf-nl4w" class="val" id="s3valKOR">0.30</span></span></div>
+            <div data-hf-id="hf-gav5" class="track"><div data-hf-id="hf-gj00" class="fill" id="s3fillKOR"></div></div>
+          </div>
+        </div>
+        <div data-hf-id="hf-jfdb" class="caption display" id="s3cap">Watching <span data-hf-id="hf-ah48" class="hl">every</span> match at once — on one feed.</div>
+      </section>
+
+      <!-- SWITCH overlay -->
+      <section data-hf-id="hf-jh6k" id="sw" class="scene clip" data-start="12.4" data-duration="1.9" data-track-index="9">
+        <div data-hf-id="hf-pxzy" class="banner display" id="swbanner"><span data-hf-id="hf-t2v3" class="tag">Switch</span><span data-hf-id="hf-jxk3" class="call">KOR v GER</span></div>
+        <div data-hf-id="hf-3kro" class="why display" id="swwhy">WHY: danger 0.62 (+0.21) — rising fast</div>
+      </section>
+
+      <!-- S5 game 2 feed + GOAL -->
+      <section data-hf-id="hf-vwou" id="s5" class="scene clip" data-start="12.9" data-duration="8.8" data-track-index="2">
+        <div data-hf-id="hf-tj7y" class="pitch" id="s5pitch"></div>
+        <div data-hf-id="hf-pyze" class="glow" id="s5glow"></div>
+        <div data-hf-id="hf-xyqe" class="flash" id="s5flash"></div>
+        <div data-hf-id="hf-iwrm" class="scorebug display" id="s5bug">
+          <span data-hf-id="hf-vofx" class="kit" style="background:#c8102e"></span>
+          <span data-hf-id="hf-rkzy" class="match">KOR <span data-hf-id="hf-k3sq" id="s5score" class="score">0–0</span> GER</span>
+          <span data-hf-id="hf-jt87" class="kit" style="background:#e8e8e8"></span>
+          <span data-hf-id="hf-0ya1" class="live"><span data-hf-id="hf-zcc2" class="dot"></span>LIVE</span>
+          <span data-hf-id="hf-x7db" class="clock">73:26</span>
+        </div>
+        <div data-hf-id="hf-ilm6" class="panel" id="s5panel">
+          <div data-hf-id="hf-aln7" class="ph display">Director — Live Danger</div>
+          <div data-hf-id="hf-y5m3" class="drow display on" id="s5rowKOR">
+            <div data-hf-id="hf-9rms" class="top"><span data-hf-id="hf-ugme" class="team">KOR v GER</span>
+              <span data-hf-id="hf-xzn8" class="right"><span data-hf-id="hf-r4t2" class="onair" id="s5onKOR" style="opacity:1">▶ On Air</span><span data-hf-id="hf-aqvh" class="val" id="s5valKOR">0.62</span></span></div>
+            <div data-hf-id="hf-hhs8" class="track"><div data-hf-id="hf-4hiw" class="fill" id="s5fillKOR" style="background:var(--red);transform:scaleX(0.9)"></div></div>
+          </div>
+          <div data-hf-id="hf-dmh2" class="drow display" id="s5rowMEX">
+            <div data-hf-id="hf-9dbr" class="top"><span data-hf-id="hf-ylov" class="team">MEX v SWE</span>
+              <span data-hf-id="hf-xlc7" class="right"><span data-hf-id="hf-c84l" class="val">0.29</span></span></div>
+            <div data-hf-id="hf-h3h7" class="track"><div data-hf-id="hf-8l5j" class="fill" id="s5fillMEX" style="background:var(--ramp-blue);transform:scaleX(0.42)"></div></div>
+          </div>
+        </div>
+        <div data-hf-id="hf-88hb" class="caption display" id="s5cap">You're already here — <span data-hf-id="hf-k0bg" class="hl">72s before</span> it happens.</div>
+        <div data-hf-id="hf-ht47" class="goalmsg display" id="s5goal" data-layout-allow-overlap=""><span data-hf-id="hf-bogr" class="g">Goal</span></div>
+      </section>
+
+      <!-- S6 proof -->
+      <section data-hf-id="hf-1h99" id="s6" class="scene clip" data-start="21.6" data-duration="3.2" data-track-index="6">
+        <div data-hf-id="hf-207u" class="wrap" data-layout-allow-overlap="">
+          <div data-hf-id="hf-pif6" class="num display"><span data-hf-id="hf-j3dd" id="s6num">~0</span><span data-hf-id="hf-4y8j" class="u">s</span></div>
+          <div data-hf-id="hf-s9ei" class="sub display">of warning — before the goal</div>
+          <div data-hf-id="hf-mnf3" class="gran display">and <b data-hf-id="hf-6lcz">IBM Granite</b> called the switch out loud.</div>
+        </div>
+      </section>
+
+      <!-- S7 pros -->
+      <section data-hf-id="hf-mpv5" id="s7" class="scene clip" data-start="24.7" data-duration="3.2" data-track-index="7">
+        <div data-hf-id="hf-plux" class="prowrap">
+          <div data-hf-id="hf-k8bi" class="pt display" id="s7pt">Why PitchSwitch</div>
+          <div data-hf-id="hf-4ost" class="rows display">
+            <div data-hf-id="hf-b025" class="pro" id="pro1"><span data-hf-id="hf-8dw9" class="ic"></span><span data-hf-id="hf-qxl1" class="t">Watches <b data-hf-id="hf-dig4">every</b> match at once</span></div>
+            <div data-hf-id="hf-ey66" class="pro" id="pro2"><span data-hf-id="hf-hovh" class="ic"></span><span data-hf-id="hf-z94e" class="t">Cuts you in <b data-hf-id="hf-mjj2">before</b> the goal</span></div>
+            <div data-hf-id="hf-iwa7" class="pro" id="pro3"><span data-hf-id="hf-ivsk" class="ic"></span><span data-hf-id="hf-jygn" class="t">Shows you <b data-hf-id="hf-a76h">why</b> — on screen</span></div>
+            <div data-hf-id="hf-mue8" class="pro" id="pro4"><span data-hf-id="hf-ihhj" class="ic"></span><span data-hf-id="hf-0pke" class="t">Leans toward your <b data-hf-id="hf-rgms">small nations</b></span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- S8 wordmark -->
+      <section data-hf-id="hf-cpv6" id="s8" class="scene clip" data-start="27.7" data-duration="3.0" data-track-index="8">
+        <div data-hf-id="hf-6jvi" class="lockup">
+          <div data-hf-id="hf-rvkm" class="mark display" id="s8mark">P<span data-hf-id="hf-1lwl" class="dot">I</span>TCHSWITCH</div>
+          <div data-hf-id="hf-fb24" class="tag display" id="s8tag">Never watch the wrong game again.</div>
+          <div data-hf-id="hf-vqun" class="rule" id="s8rule"></div>
+        </div>
+      </section>
+
+      <!-- ===================== AUDIO ===================== -->
+      <audio data-hf-id="hf-xqto" id="bgm" src="assets/music/happy-beats-business-moves-vol-11-by-ende-dot-app.mp3" data-start="0" data-duration="30.7" data-track-index="10" data-volume="0.8"></audio>
+      <audio data-hf-id="hf-q3a0" id="aH1" src="assets/sfx/rollover2.ogg" data-start="1.00" data-duration="0.12" data-track-index="11" data-volume="0.45"></audio>
+      <audio data-hf-id="hf-sjmb" id="aH2" src="assets/sfx/rollover2.ogg" data-start="2.00" data-duration="0.12" data-track-index="12" data-volume="0.45"></audio>
+      <audio data-hf-id="hf-5jci" id="aH3" src="assets/sfx/rollover2.ogg" data-start="3.00" data-duration="0.12" data-track-index="13" data-volume="0.5"></audio>
+      <audio data-hf-id="hf-z4cf" id="aBefore" src="assets/sfx/impactSoft_heavy_002.ogg" data-start="5.80" data-duration="0.44" data-track-index="11" data-volume="0.7"></audio>
+      <audio data-hf-id="hf-nrov" id="aKick1" src="assets/sfx/impactSoft_medium_002.ogg" data-start="8.05" data-duration="0.14" data-track-index="12" data-volume="0.5"></audio>
+      <audio data-hf-id="hf-3qzw" id="aKick2" src="assets/sfx/impactSoft_medium_002.ogg" data-start="9.45" data-duration="0.14" data-track-index="13" data-volume="0.5"></audio>
+      <audio data-hf-id="hf-eklz" id="aBanner" src="assets/sfx/impactSoft_heavy_001.ogg" data-start="12.65" data-duration="0.46" data-track-index="11" data-volume="0.82"></audio>
+      <audio data-hf-id="hf-6vdq" id="aSwitch" src="assets/sfx/switch_002.ogg" data-start="12.95" data-duration="0.44" data-track-index="14" data-volume="0.6"></audio>
+      <audio data-hf-id="hf-ui5t" id="aKick3" src="assets/sfx/impactSoft_medium_000.ogg" data-start="14.05" data-duration="0.12" data-track-index="12" data-volume="0.55"></audio>
+      <audio data-hf-id="hf-i8mm" id="aKick4" src="assets/sfx/impactSoft_medium_000.ogg" data-start="15.05" data-duration="0.12" data-track-index="13" data-volume="0.55"></audio>
+      <audio data-hf-id="hf-0n4i" id="aKick5" src="assets/sfx/impactSoft_medium_000.ogg" data-start="16.05" data-duration="0.12" data-track-index="15" data-volume="0.55"></audio>
+      <audio data-hf-id="hf-og4r" id="aShot" src="assets/sfx/impactSoft_heavy_002.ogg" data-start="17.62" data-duration="0.44" data-track-index="12" data-volume="0.8"></audio>
+      <audio data-hf-id="hf-duny" id="aGoal" src="assets/sfx/impactBell_heavy_000.ogg" data-start="17.91" data-duration="0.56" data-track-index="11" data-volume="0.9"></audio>
+      <audio data-hf-id="hf-his6" id="aP1" src="assets/sfx/rollover2.ogg" data-start="25.30" data-duration="0.12" data-track-index="13" data-volume="0.4"></audio>
+      <audio data-hf-id="hf-jqn4" id="aP2" src="assets/sfx/rollover2.ogg" data-start="25.75" data-duration="0.12" data-track-index="15" data-volume="0.4"></audio>
+      <audio data-hf-id="hf-2gjn" id="aP3" src="assets/sfx/rollover2.ogg" data-start="26.20" data-duration="0.12" data-track-index="16" data-volume="0.4"></audio>
+      <audio data-hf-id="hf-0d1i" id="aP4" src="assets/sfx/rollover2.ogg" data-start="26.65" data-duration="0.12" data-track-index="17" data-volume="0.4"></audio>
+      <audio data-hf-id="hf-vxcs" id="aMark" src="assets/sfx/impactBell_heavy_000.ogg" data-start="28.05" data-duration="0.56" data-track-index="12" data-volume="0.85"></audio>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      function ramp(v){ return v >= 0.5 ? "#ff3b3b" : v >= 0.3 ? "#ffcc00" : "#4da6ff"; }
+
+      // ---- pitch markings + player builders ----
+      function markings(el){
+        el.innerHTML =
+          '<div class="turf"><div class="mow"></div></div>' +
+          '<div class="ln half"></div><div class="ln circle"></div><div class="ln spot"></div>' +
+          '<div class="ln boxL"></div><div class="ln boxR"></div>' +
+          '<div class="ln goalL"></div><div class="ln goalR"></div><div class="pvig"></div>';
+      }
+      function mk(parent, x, y, color, num, numColor){
+        const d = document.createElement('div');
+        d.className = 'player';
+        d.style.left = (x - 19) + 'px'; d.style.top = (y - 34) + 'px';
+        d.innerHTML =
+          '<div class="shadow"></div>' +
+          '<div class="head"></div>' +
+          '<div class="torso" style="background:' + color + '"></div>' +
+          '<div class="shorts"></div>' +
+          '<div class="num" style="color:' + (numColor || '#fff') + '">' + (num || '') + '</div>';
+        d._bx = x; d._by = y;
+        parent.appendChild(d); return d;
+      }
+      function mkball(parent, x, y){
+        const d = document.createElement('div'); d.className = 'ball';
+        d.style.left = (x - 9) + 'px'; d.style.top = (y - 9) + 'px';
+        d._bx = x; d._by = y; parent.appendChild(d); return d;
+      }
+      // move element to absolute (nx,ny) at time t over dur
+      function moveTo(el, nx, ny, t, dur, ease){
+        tl.to(el, { x: nx - el._bx, y: ny - el._by, duration: dur, ease: ease || "power1.inOut" }, t);
+      }
+      // gentle idle drift for non-movers, finite repeat within [t, t+span]
+      function idle(el, t, span){
+        const cyc = 1.2;
+        const reps = Math.max(1, Math.floor(span / cyc) - 1);
+        const dx = (el._bx % 7) - 3, dy = (el._by % 5) - 2;
+        tl.to(el, { x: dx, y: dy, duration: cyc, yoyo: true, repeat: reps, ease: "sine.inOut" }, t);
+      }
+
+      // ===== GAME 1 (MEX blue → SWE orange) =====
+      const p3 = document.getElementById('s3pitch'); markings(p3);
+      const G1 = '#4da6ff', A1 = '#ff8c42';
+      const mexN = [1,4,2,8,7,11,9], sweN = [1,5,6,17,10,9,7];
+      const g1home = [[150,540],[430,360],[440,540],[430,720],[780,440],[840,600],[1150,520]].map((p,i)=>mk(p3,p[0],p[1],G1,mexN[i],'#fff'));
+      const g1away = [[1780,540],[1500,380],[1520,560],[1500,720],[1180,470],[1150,650],[820,540]].map((p,i)=>mk(p3,p[0],p[1],A1,sweN[i],'#3a1f0a'));
+      const b1 = mkball(p3, 820, 560);
+      // calm possession: knock it around midfield, recycle
+      g1home.forEach((e,i)=>{ if(i!==4 && i!==5) idle(e, 6.9, 5.8); });
+      g1away.forEach((e,i)=>{ if(i!==6) idle(e, 6.9, 5.8); });
+      moveTo(b1, 840, 600, 7.4, 0.6, "power2.out");        // to MEX mid
+      moveTo(g1home[5], 900, 600, 7.5, 0.6);
+      moveTo(b1, 1150, 520, 8.0, 0.7, "power2.out");        // forward
+      moveTo(g1home[4], 980, 470, 8.1, 0.8);
+      moveTo(b1, 820, 540, 9.4, 0.8, "power2.inOut");       // recycle back
+      moveTo(g1home[5], 840, 600, 9.4, 0.8);
+      moveTo(b1, 1000, 560, 10.6, 0.9, "power1.inOut");     // probe again
+
+      // ===== GAME 2 (KOR red → GER white) =====
+      const p5 = document.getElementById('s5pitch'); markings(p5);
+      const G2 = '#c8102e', A2 = '#e8e8e8';
+      const korN = [1,4,2,3,17,16,6,9,7], gerN = [1,5,4,6,2,8,13,9];
+      const g2home = [[160,540],[450,340],[450,540],[450,740],[790,380],[840,560],[820,720],[1160,470],[1180,620]].map((p,i)=>mk(p5,p[0],p[1],G2,korN[i],'#fff'));
+      const g2away = [[1800,540],[1520,360],[1540,540],[1520,720],[1620,470],[1220,360],[1200,640],[980,540]].map((p,i)=>mk(p5,p[0],p[1],A2,gerN[i],'#16241a'));
+      const b2 = mkball(p5, 820, 560);
+      const kWing = g2home[4], kFwd = g2home[7], kStrike = g2home[8];
+      const gGK = g2away[0], gD1 = g2away[1], gD4 = g2away[4];
+      // idle the non-movers
+      g2home.forEach((e,i)=>{ if(i!==4 && i!==7 && i!==8) idle(e, 13.0, 4.6); });
+      g2away.forEach((e,i)=>{ if(i!==0 && i!==1 && i!==4) idle(e, 13.0, 4.6); });
+      // build-up
+      moveTo(b2, 1160, 470, 14.0, 0.5, "power2.out");       // pass to KOR fwd
+      moveTo(b2, 1480, 320, 15.0, 0.7, "power2.out");       // through ball to wing
+      moveTo(kWing, 1480, 330, 14.8, 1.0, "power1.out");    // winger runs on
+      moveTo(b2, 1650, 560, 16.0, 0.85, "power2.out");      // cutback into the box
+      moveTo(kStrike, 1640, 560, 15.9, 1.1, "power2.out");  // striker arrives
+      moveTo(kFwd, 1480, 600, 16.0, 1.0);                   // support
+      moveTo(gD1, 1600, 500, 16.0, 0.8);                    // GER collapse
+      moveTo(gD4, 1680, 540, 16.1, 0.8);
+      // the shot
+      moveTo(b2, 1815, 532, 17.62, 0.30, "power4.in");
+      moveTo(gGK, 1800, 470, 17.66, 0.26, "power2.out");    // keeper dives, beaten
+      // celebrate: striker peels away with a little bounce
+      moveTo(kStrike, 1500, 360, 18.2, 1.1, "power2.out");
+      tl.to(kStrike, { scale: 1.3, duration: 0.3, yoyo: true, repeat: 3, ease: "sine.inOut" }, 19.35);
+
+      // ============ S1 HOOK (0-3.5) ============
+      tl.fromTo("#s1l1", { opacity:0, y:42 }, { opacity:1, y:0, duration:0.4, ease:"power3.out" }, 1.0);
+      tl.fromTo("#s1l2", { opacity:0, y:42 }, { opacity:1, y:0, duration:0.4, ease:"power3.out" }, 2.0);
+      tl.fromTo("#s1l3", { opacity:0, y:42 }, { opacity:1, y:0, duration:0.4, ease:"power3.out" }, 3.0);
+      tl.fromTo("#s1ul", { scaleX:0 }, { scaleX:1, duration:0.45, ease:"power2.out" }, 3.05);
+      tl.to("#s1", { opacity:0, duration:0.2, ease:"power1.in" }, 3.32);
+
+      // ============ S2 TURN (3.4-6.7) ============
+      tl.fromTo("#s2after", { opacity:0, y:24 }, { opacity:1, y:0, duration:0.45, ease:"power2.out" }, 3.7);
+      tl.fromTo("#s2before", { opacity:0 }, { opacity:1, duration:0.3 }, 4.55);
+      // beat-locked: 5.80 — BEFORE slams in red
+      tl.fromTo("#s2word", { opacity:0, scale:1.45, y:6 }, { opacity:1, scale:1, y:0, duration:0.4, ease:"back.out(2)" }, 5.80);
+      tl.to("#s2", { opacity:0, duration:0.2, ease:"power1.in" }, 6.45);
+
+      // ============ S3 GAME 1 (6.6-12.9) ============
+      tl.fromTo("#s3pitch", { opacity:0 }, { opacity:1, duration:0.5, ease:"power1.out" }, 6.7);
+      tl.fromTo("#s3bug", { opacity:0, x:-26 }, { opacity:1, x:0, duration:0.4, ease:"power2.out" }, 7.0);
+      tl.fromTo("#s3panel", { opacity:0, x:30 }, { opacity:1, x:0, duration:0.45, ease:"power2.out" }, 7.1);
+      tl.fromTo("#s3cap", { opacity:0, y:16 }, { opacity:1, y:0, duration:0.4, ease:"power2.out" }, 8.0);
+      // MEX low/steady, KOR (other match) climbing toward the cut
+      tl.set("#s3fillMEX", { scaleX: 0.28 }, 7.1);
+      const k3 = { v: 0.30 };
+      tl.set("#s3fillKOR", { scaleX: 0.30 * 1.45, backgroundColor: ramp(0.30) }, 7.1);
+      tl.to(k3, { v: 0.62, duration: 5.0, ease: "power2.in", onUpdate: function(){
+        const el = document.getElementById("s3valKOR"), f = document.getElementById("s3fillKOR");
+        if(el) el.textContent = k3.v.toFixed(2);
+        if(f){ f.style.transform = "scaleX(" + Math.min(1, k3.v*1.45).toFixed(3) + ")"; f.style.backgroundColor = ramp(k3.v); }
+      }}, 7.2);
+      tl.to("#s3cap", { opacity:0, duration:0.2 }, 11.6);
+      tl.to("#s3", { opacity:0, duration:0.22, ease:"power1.in" }, 12.6);  // feed cuts
+
+      // ============ SWITCH banner (12.4-14.3) ============
+      // beat-locked: 12.65 — the Director cuts
+      tl.fromTo("#swbanner", { opacity:0, scaleX:0.2 }, { opacity:1, scaleX:1, duration:0.32, ease:"power4.out" }, 12.65);
+      tl.fromTo("#swwhy", { opacity:0, y:14 }, { opacity:1, y:0, duration:0.35, ease:"power2.out" }, 13.05);
+      tl.to("#swbanner", { opacity:0, duration:0.3 }, 13.75);
+      tl.to("#swwhy", { opacity:0, duration:0.3 }, 13.85);
+
+      // ============ S5 GAME 2 + GOAL (12.9-21.7) ============
+      tl.fromTo("#s5pitch", { opacity:0 }, { opacity:1, duration:0.45, ease:"power1.out" }, 12.95);
+      tl.fromTo("#s5bug", { opacity:0, x:-26 }, { opacity:1, x:0, duration:0.4, ease:"power2.out" }, 13.2);
+      tl.fromTo("#s5panel", { opacity:0, x:30 }, { opacity:1, x:0, duration:0.4, ease:"power2.out" }, 13.25);
+      tl.fromTo("#s5cap", { opacity:0, y:16 }, { opacity:1, y:0, duration:0.4, ease:"power2.out" }, 14.6);
+      // danger glow swells over the attacking third as the move builds
+      tl.fromTo("#s5glow", { opacity:0, scale:0.94 }, { opacity:0.85, scale:1, duration:2.6, ease:"power1.in" }, 15.2);
+      tl.to("#s5cap", { opacity:0, duration:0.2 }, 17.4);
+      // GOAL at 17.91 (beat-locked): flash, message, score, glow peak
+      tl.to("#s5glow", { opacity:1, duration:0.12 }, 17.91);
+      tl.fromTo("#s5flash", { backgroundColor:"rgba(255,59,59,0)" }, { backgroundColor:"rgba(255,59,59,0.45)", duration:0.1, yoyo:true, repeat:1 }, 17.91);
+      tl.fromTo("#s5goal", { opacity:0, scale:1.4 }, { opacity:1, scale:1, duration:0.4, ease:"back.out(1.7)" }, 17.91);
+      // score flips on the goal — driven by onUpdate so it survives render seeks
+      const sc = { p: 0 };
+      tl.to(sc, { p: 1, duration: 3.3, ease: "none", onUpdate: function(){
+        const e = document.getElementById("s5score"); if(e) e.textContent = sc.p > 0 ? "1–0" : "0–0";
+      }}, 17.91);
+      tl.to("#s5goal", { opacity:0, duration:0.4, ease:"power1.in" }, 20.4);
+      tl.to("#s5glow", { opacity:0.5, duration:0.6 }, 20.4);
+      tl.to("#s5", { opacity:0, duration:0.3, ease:"power1.in" }, 21.3);
+      tl.set("#s5", { opacity:0 }, 21.6);
+
+      // ============ S6 PROOF (21.6-24.8) ============
+      const pf = { p: 0 };
+      tl.fromTo("#s6 .num", { opacity:0, y:20 }, { opacity:1, y:0, duration:0.4, ease:"power2.out" }, 21.8);
+      // spanning count-up: reaches 72 by ~p=0.5 then holds, so onUpdate fires for the whole hold
+      tl.to(pf, { p: 1, duration: 2.6, ease:"none", onUpdate:function(){
+        const el = document.getElementById("s6num");
+        if(el) el.textContent = "~" + Math.round(Math.min(1, pf.p / 0.5) * 72);
+      }}, 21.95);
+      tl.fromTo("#s6 .sub", { opacity:0, y:14 }, { opacity:1, y:0, duration:0.4, ease:"power2.out" }, 22.2);
+      tl.fromTo("#s6 .gran", { opacity:0, y:14 }, { opacity:1, y:0, duration:0.5, ease:"power2.out" }, 22.9);
+      tl.to("#s6", { opacity:0, duration:0.22, ease:"power1.in" }, 24.55);
+
+      // ============ S7 PROS (24.7-27.9) ============
+      tl.fromTo("#s7pt", { opacity:0, y:16 }, { opacity:1, y:0, duration:0.35, ease:"power2.out" }, 24.9);
+      tl.fromTo("#pro1", { opacity:0, x:-26 }, { opacity:1, x:0, duration:0.3, ease:"power3.out" }, 25.3);
+      tl.fromTo("#pro2", { opacity:0, x:-26 }, { opacity:1, x:0, duration:0.3, ease:"power3.out" }, 25.75);
+      tl.fromTo("#pro3", { opacity:0, x:-26 }, { opacity:1, x:0, duration:0.3, ease:"power3.out" }, 26.2);
+      tl.fromTo("#pro4", { opacity:0, x:-26 }, { opacity:1, x:0, duration:0.3, ease:"power3.out" }, 26.65);
+      tl.to("#s7", { opacity:0, duration:0.24, ease:"power1.in" }, 27.5);
+      tl.set("#s7", { opacity:0 }, 27.74);
+
+      // ============ S8 WORDMARK (27.7-30.7) ============
+      tl.fromTo("#s8mark", { opacity:0, scale:1.16 }, { opacity:1, scale:1, duration:0.5, ease:"power3.out" }, 28.05);
+      tl.fromTo("#s8rule", { scaleX:0 }, { scaleX:1, duration:0.5, ease:"power2.out" }, 28.5);
+      tl.fromTo("#s8tag", { opacity:0, y:14 }, { opacity:1, y:0, duration:0.5, ease:"power2.out" }, 28.65);
+      tl.to("#s8", { opacity:0, duration:0.5, ease:"power2.in" }, 30.2);
+
+      // ============ MUSIC ============
+      tl.to("#bgm", { volume:0.92, duration:0.2 }, 17.7);     // swell into the goal
+      tl.to("#bgm", { volume:0.5, duration:0.4 }, 21.7);      // duck under the proof read
+      tl.to("#bgm", { volume:0.8, duration:0.4 }, 24.6);
+      tl.to("#bgm", { volume:0.0, duration:0.7 }, 29.9);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

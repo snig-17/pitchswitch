@@ -176,6 +176,36 @@ def _narrate(home, away, danger, favourite, grounding, provider):
     return f"{prefix}Cut to {home} vs {away} — a dangerous attack is building!"
 
 
+def _pick_goal(games, schedule, times):
+    """Pick one watchable goal for the demo: the highest-danger frame of the
+    match that is *on air* at that moment, so the viewer is actually watching
+    when it goes in. Returns ``(game_index, time, side)`` with ``side='h'``
+    (the home team scores), or ``None`` when no match ever reaches real danger.
+    """
+    if not games or not times:
+        return None
+
+    def onair_at(at):
+        gi = schedule[0][1] if schedule else 0
+        for s in schedule:
+            if s[0] <= at:
+                gi = s[1]
+            else:
+                break
+        return gi
+
+    best = None  # (danger, time, game_index)
+    for k, t in enumerate(times):
+        gi = onair_at(t)
+        dl = games[gi].get("danger", [])
+        dv = dl[k] if k < len(dl) else 0.0
+        if best is None or dv > best[0]:
+            best = (dv, t, gi)
+    if best is None or best[0] <= 0:
+        return None
+    return best[2], round(best[1], 1), "h"
+
+
 def build_unified_broadcast(matchups, favourite: str = "", t0: float = 0.0,
                             dur: float = 120.0, fps: int = 8,
                             margin: float = 0.12, dwell: float = 5.0,
@@ -276,4 +306,13 @@ def build_unified_broadcast(matchups, favourite: str = "", t0: float = 0.0,
             last_switch = t
             schedule.append([round(t, 1), on])
         prev_diff = diff
+
+    # Guarantee one watchable goal in the demo, at the on-air danger peak, with
+    # the matching big GOAL overlay (rendered client-side in livefeed.py).
+    for g in games:
+        g["goals"] = []
+    goal = _pick_goal(games, schedule, times)
+    if goal:
+        gi, gt, side = goal
+        games[gi]["goals"].append([gt, side])
     return {"games": games, "schedule": schedule}

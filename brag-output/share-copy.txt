@@ -1,0 +1,3 @@
+PitchSwitch — like NFL RedZone, but for soccer, and it cuts you to the match about to score *before* the goal instead of after.
+
+It scores every simultaneous World Cup match for live danger, and the moment one pulls ahead it switches your feed — so you're already watching the right game when it erupts. ~70 seconds of warning, the on-screen "why," and IBM Granite calling every switch out loud.
