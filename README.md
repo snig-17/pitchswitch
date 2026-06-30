@@ -1,199 +1,79 @@
 # PitchSwitch
 
-> Like NFL RedZone, but for soccer, and it switches you *before* the goal instead of after.
+> Like NFL RedZone, but for soccer — and it switches you *before* the goal, not after.
 
-**▶ [Live demo](https://pitchswitch-g5cvhbdq89gvdfxmb4awmn.streamlit.app)** — pick a favourite team and hit Start. Watch the Director cut to whichever match is heating up and *show you why* (the live danger differential on screen), with IBM Granite calling each switch out loud. Tap "🔊 commentary" for the spoken call.
+**▶ [Live demo](https://pitchswitch-g5cvhbdq89gvdfxmb4awmn.streamlit.app)** — one AI feed that cuts to whichever World Cup match is heating up, shows you *why*, and calls every switch out loud. Pick a team, hit Start.
 
-## The Problem
+## The problem
 
-In the World Cup group stage, the final round of matches in each group kicks off at the exact same time. This isn't an accident. FIFA made it a rule after West Germany and Austria played out a result in 1982 that knocked Algeria out, so now both games in a group run simultaneously and nobody can play to a convenient scoreline.
+In the World Cup group stage, the last two games in every group kick off **at the same time** — a rule FIFA introduced in 1982 so nobody can play to a convenient scoreline. You can only watch one screen, and the goal that decides the group always seems to land on the other one. In 2018, fans on Mexico–Sweden missed South Korea knocking the defending champions out in stoppage time.
 
-The catch is you can only watch one screen. Take the 2018 group finale: Germany were playing South Korea while Mexico played Sweden at the same moment, and the two results were tangled together. Pick the Mexico game and you miss South Korea knocking the defending champions out in stoppage time. It happened again in 2022, Japan vs Spain running alongside Germany vs Costa Rica, with the qualifying table flipping three or four times in the last ten minutes across two pitches you couldn't watch at once.
+Broadcasters don't fix this. NFL RedZone works because American football stops between plays and scores constantly. Soccer is the opposite — it flows nonstop and barely scores, so switching you to a goal *after* it happens just shows you what you already missed. And smaller nations get almost no airtime, even when theirs is the game worth watching.
 
-Broadcasters don't really fix this. NFL RedZone works because American football stops between plays and scores constantly, so there are clean moments to cut to. Soccer is the opposite. It flows nonstop and barely scores, so a tool that just switches you to a goal after it goes in is useless, because it shows you the thing you already missed. And smaller nations get almost no airtime at all, even when theirs is the game worth watching.
+## The solution
 
-## The Solution
+PitchSwitch watches every match at once and gets you to the action **before** it happens.
 
-PitchSwitch watches every match at once and tries to get you to the action *before* it happens, not after.
+- **A live danger score** for each match from play-by-play data — carries into the final third, pressure in the box, shots, set pieces. The key signal is *how fast danger is rising*, which catches a game about to boil over instead of one that already has. On the test matches it flagged goals **~71 seconds early** on average.
+- **The Director cuts** to whichever match's danger is pulling ahead — and shows you the on-screen danger bars and the differential that triggered the cut.
+- **IBM Granite calls each switch** in a line a presenter would actually say — *"Switch to Brazil–Croatia, penalty about to be taken after VAR"* — grounded in real team context, so it knows Son drives Korea's press.
+- **Coach** explains the game for new fans: when a penalty, card, or goal happens, it states the rule in one plain sentence — grounded on the actual Laws of the Game, never guessing at referee judgment.
+- **Pick your team** — including the small nations broadcasters ignore — and the switching leans toward them.
 
-It gives each match a live danger score from the play-by-play data, things like balls carried into the final third, pressure in the box, shots, corners and penalties. The key signal is how fast that danger is rising, which is what catches a game about to boil over instead of one that already has. On the test matches it flagged goals with about 70 seconds of warning on average.
+The main screen is **one live broadcast over real 25fps player tracking** (all 22 players in national kits), narrated out loud in a British commentator voice. It plays like a control room, not a dashboard.
 
-The Director cuts to whichever match's danger is pulling ahead — and shows you *why*: an on-screen danger bar for each match and the differential that triggered the cut. IBM Granite calls each switch in a line a TV presenter would actually say, grounded in real team context parsed with IBM Docling, so the narration knows Son drives Korea's press and Mbappe is France's outlet, not just the score.
-
-You can name your teams too, including the small nations broadcasters ignore, and it leans the switching toward them.
-
-The main screen is **one live feed over real player tracking** (25fps, all 22 players in national kits with shirt numbers, from Metrica's open data). The Director cuts between matches when one's danger pulls ahead, and Granite calls each switch out loud — spoken in a British commentator voice via **IBM Watson Text to Speech**. It plays like a real broadcast control room, not a dashboard.
-
-### Coach — explainable AI for casual fans
-
-World Cup 2026 is in North America, pulling in millions of first-time viewers who don't know offside from a throw-in. So **"Coach"** explains the game as it happens: when a penalty, foul, card, corner, or goal occurs, Coach says the rule in one plain sentence ("Goal: the whole ball crossed the line between the posts and under the bar...") — generated by Granite, **grounded on the actual Laws of the Game parsed by Docling** (`data/rules/`), and spoken in its own voice. It explains only what's deterministically explainable (the rules), never guesses at referee judgment. This makes Docling a backbone, not a decoration, and turns the tool from analyst-facing to audience-facing.
-
-## Technical Approach
+## AI / technical approach
 
 ```
-Metrica tracking (25fps, 22 players + ball)      StatsBomb events (anticipation model + calibration)
-        |                                                |
-  metrica.py     per-frame danger + differential        heat.py    rolling danger + rising-danger derivative
-        |         switch schedule                        director.py + grounding.py + personalize.py
-        |                                                (Granite reasoning, Docling primers, team bias)
-        v                                                        |
-  build_unified_broadcast  <-- Granite/Docling narration + favourite bias --+
-        |
-  livefeed.py    self-contained HTML5 canvas: 22 avatars glide, the Director
-        |        cuts between matches, narration banner + spoken commentary
-        |
-  providers/tts.py   IBM Watson Text to Speech (spoken switch calls)
-        |
-  app.py             Streamlit: one unified broadcast feed (cached for fast start)
+Metrica tracking (25fps, 22 players + ball)        StatsBomb events
+        │                                                 │
+  per-frame danger + differential          rolling danger + rising-danger derivative
+        │  (deterministic switch schedule)        (anticipation model + calibration)
+        └────────────────────┬───────────────────────────┘
+                             ▼
+     IBM Granite narration, grounded by IBM Docling team + rule primers
+                             ▼
+     IBM Watson Text to Speech  →  Streamlit live feed (HTML5 canvas)
 ```
 
-Three IBM technologies: **Granite** (switch reasoning + narration), **Docling**
-(team-primer grounding), **Watson Text to Speech** (spoken commentary). The LLM
-provider is swappable (`providers/llm.py`): Granite runs locally via Ollama, or
-on IBM watsonx.ai / Replicate in the cloud.
+**Three IBM technologies:** **Granite** (switch narration + Coach reasoning), **Docling** (grounds Granite in team primers + the Laws of the Game), **Watson Text to Speech** (spoken commentary). The LLM provider is swappable (`providers/llm.py`) — Granite runs locally via Ollama, or on watsonx.ai / Replicate.
 
-The live feed uses Metrica's open tracking (real continuous movement, anonymised
-teams) mapped to World Cup fixtures so Granite/Docling/personalization apply —
-the team labels are illustrative, a representative stand-in for a licensed
-broadcast feed (FIFA blocks real match video from embedding). The StatsBomb
-pipeline (`heat.py`, `scripts/calibrate.py`) backs the anticipation model and
-the accuracy numbers below.
+The switch itself is decided **deterministically** by the danger differential you see on screen, so a cut is never blocked on LLM latency — Granite writes the *call*, it doesn't pick it. Danger is a rolling 90-second window of events; the forward-looking signal is its **time derivative** — how fast danger is climbing — which is what enables switching *before* the moment, not after.
 
-### How the Anticipation Model Works
+Accuracy on real data (StatsBomb open events, `scripts/calibrate.py`, 120s window, 15 goals):
 
-Each match maintains a **danger score** (0.0 to 1.0) computed from a rolling 90-second window of events:
-- Carries into the final third
-- Pressure events in the opponent's half
-- Passes into the penalty area
-- Shot xG accumulation
-- Set-piece indicators (penalty, corner, free kick in range)
-- Late-game tight-scoreline multiplier (1.5x in last 15 minutes)
+| Predicted | Avg lead time | False positive |
+|:--:|:--:|:--:|
+| 7/15 (47%) | **71s** | 42% |
 
-The **forward-looking signal** is the time-based derivative: how fast danger is climbing. A sharp rise triggers the "about to ignite" flag even before the absolute danger peaks. This is what enables switching before the moment, not after.
+The headline is lead time: ~71 seconds of warning before a goal. Soccer is low-scoring, so perfect recall isn't the point — surfacing the matches heating up, *early*, is. Full methodology and window sensitivity are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-### IBM Granite Integration
+The tracking feed uses Metrica's open data mapped to World Cup fixtures — an illustrative stand-in for a licensed broadcast feed, since FIFA blocks real match video from embedding.
 
-In the live broadcast, the switch itself is decided deterministically by the danger differential (the thing you see on screen), so a cut is never blocked on LLM latency. IBM Granite's job is the *call*: for each switch it generates the natural-language narration a presenter would say — "Switch to Brazil-Croatia, penalty about to be taken after VAR review." — and it powers Coach's rule explanations. Both are grounded by Docling.
+## Why it matters for soccer & the FIFA World Cup
 
-The repo also ships an event-model Director (`core/director.py`) that uses Granite as a tie-break reasoner when two matches are within 0.15 danger of each other. That path drives the StatsBomb anticipation model used in the offline calibration below; the live tracking feed uses the deterministic differential so the broadcast stays real-time.
+- **It's structurally a World Cup problem.** Simultaneous final-round kickoffs exist *only* because of FIFA's group-stage rule — this isn't a generic highlights tool, it solves something specific to the tournament.
+- **It fits how soccer actually behaves.** A flowing, low-scoring sport defeats after-the-fact switching; anticipation is the only thing that helps, and that's the whole model.
+- **2026 is in North America** — millions of first-time viewers who don't know offside from a throw-in. Coach makes the tournament watchable for them.
+- **Small nations get a stage.** Personalization biases the feed toward the teams broadcasters skip — *"Your team Cape Verde has a corner in a 0-0, get in."*
 
-### Docling Grounding
+## Quick start
 
-Nation-specific primers (team history, key players, tournament context) in `data/primers/*.md` are parsed via IBM Docling into a local knowledge base (`core/grounding.py`). When the Director builds a Granite prompt, it injects the relevant teams' facts so the narration is grounded in real context: "Switch to South Korea vs Germany - Son Heung-min is leading the Taegeuk Warriors' famous never-say-die press."
-
-Docling is optional: if the package isn't installed the app falls back to reading the markdown primers directly, so grounding works either way. The KB loads in a background thread at startup, so the ~6s parse never blocks the replay.
-
-## Model Accuracy
-
-Measured across the three demo matches (15 goals) with `scripts/calibrate.py`, using a 120-second lead window:
-
-| Metric | Value |
-|--------|-------|
-| Dangerous moments predicted | 7/15 (47%) |
-| Average lead time before event | 71s |
-| False positive rate | 42% |
-
-**The headline is lead time: ~71 seconds of warning before a goal.** That's the whole point — switching you *before* the moment, not after.
-
-### Methodology
-
-`python scripts/calibrate.py [--window SECONDS]` replays each match through the heat model and scores the switch signal (needs `pip install -r requirements-dev.txt`; StatsBomb's open data is fetched via `statsbombpy` on first run and cached locally):
-
-- **Ground truth** = goals; shots (goals + attempts) form the broader "dangerous moment" set used for false-positive scoring, since anticipating a shot or save is also a valid switch.
-- **Predicted (recall)**: a goal is predicted if a switch fired for that match in the window *strictly before* the goal — measuring anticipation, not reaction to the goal's own xG spike.
-- **False positive**: a switch with no shot/goal within the window after it.
-
-Sensitivity to the window (the model degrades gracefully, not cherry-picked):
-
-| Window | Predicted | Avg lead | False positive |
-|--------|-----------|----------|----------------|
-| 90s | 4/15 (27%) | 44s | 49% |
-| 120s | 7/15 (47%) | 71s | 42% |
-| 180s | 9/15 (60%) | 98s | 27% |
-
-Soccer is low-scoring and many goals come from quick counters with little buildup, so perfect recall isn't the goal — surfacing the matches that are *heating up*, early, is. The false-positive rate reflects that most flagged danger (sustained pressure, corners) is genuine even when it doesn't produce a shot within the window.
-
-## Personalization
-
-Select your favourite team(s), including small nations that broadcasters ignore. PitchSwitch biases switching toward their matches: "Your team Cape Verde has a corner in a 0-0, get in."
-
-## Judging Criteria Mapping
-
-| Criterion | Feature | Evidence |
-|-----------|---------|----------|
-| **Technical Execution** | Anticipation model + 3 IBM techs + real tracking feed | Rolling danger score with forward-looking derivative; Granite reasons over structured state, Docling grounds the narration, Watson TTS speaks it; live 25fps tracking broadcast |
-| **Innovation** | Multi-match anticipation + small-nation personalization | Uncontested: no tool predicts and switches pre-event; small-nation bias is unique |
-| **Challenge Fit** | "AI Inside the Match" + World Cup specific | Dead-on theme; structurally WC-specific (simultaneous group-stage games) |
-| **Implementation & Feasibility** | Free data, swappable LLM, clear product path | StatsBomb free data; provider interface for watsonx/Replicate/Ollama; 10x = broadcast control room API |
-
-## Quick Start
-
-No install needed to try it — open the **[live demo](https://pitchswitch-g5cvhbdq89gvdfxmb4awmn.streamlit.app)**.
-
-### Run it locally (30 seconds)
-
-The broadcast cache is committed to the repo, so the demo runs with nothing but the
-runtime deps — **no data download, no Ollama, no API keys.**
+No install needed — open the **[live demo](https://pitchswitch-g5cvhbdq89gvdfxmb4awmn.streamlit.app)**. To run locally (the broadcast cache is committed, so no data download, no Ollama, no API keys):
 
 ```bash
 git clone https://github.com/snig-17/pitchswitch.git
 cd pitchswitch
 pip install -r requirements.txt
-streamlit run app.py        # pick a team, hit Start — it serves the pre-built cache
+streamlit run app.py          # pick a team, hit Start
 ```
 
-### Rebuild the cache / reproduce the accuracy numbers (optional)
+Rebuilding the cache or reproducing the accuracy numbers is the heavier path (ML deps + local Granite) — see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-Only needed to regenerate broadcasts with fresh Granite narration, or to re-run the
-accuracy calibration. This is the heavier path (ML deps, tracking data, local LLM):
+## Built with
 
-```bash
-pip install -r requirements-dev.txt        # statsbombpy, docling, numpy, mplsoccer
-bash scripts/get_metrica.sh                # Metrica tracking data (~120MB, gitignored)
-cp .env.example .env                       # configure providers
-ollama pull granite3.3:2b                  # local IBM Granite for narration
-# optional: add IBM Watson Text to Speech creds in .env for spoken commentary
+IBM **Granite** · IBM **Docling** · IBM **Watson Text to Speech** · **Metrica** open tracking · **StatsBomb** open events · **Streamlit** + HTML5 canvas
 
-python scripts/prebuild_cache.py           # rebuild the broadcast cache
-python scripts/calibrate.py                # reproduce the Model Accuracy table above
-```
+## More
 
-A rebuild runs Granite (~30–40s per favourite team) and caches the result, so the
-app then loads each broadcast in ~1s.
-
-## Future Work
-
-- Connect to real-time match feeds (Opta, Stats Perform) for live World Cup 2026
-- Broadcast control room API: feed anticipation signals to human directors
-- Social watch parties with combined team preferences
-- Mobile companion app
-
-## Built With
-
-- **IBM Granite** (switch reasoning + narration)
-- **IBM Docling** (grounds Granite: team primers + the Laws of the Game for Coach)
-- **IBM Watson Text to Speech** (spoken commentary)
-- **Metrica Sports** open data (25fps player tracking)
-- **StatsBomb** open data (event data: anticipation model + accuracy calibration)
-- **mplsoccer / Streamlit / HTML5 canvas** (the live feed + UI)
-- **Claude Code** (development tool)
-
-## Tests
-
-`pytest` runs the unit suite over the live path (danger model, switching bias, Coach, and a heat-model regression) — green in CI on every push. See [TESTING.md](TESTING.md).
-
-## Architecture
-
-The two-engine design (calibrated StatsBomb model vs the live tracking feed), data flow, and where the IBM tech sits is explained in [ARCHITECTURE.md](ARCHITECTURE.md).
-
-## Design
-
-The visual language (broadcast control-room theme, tokens, type, component vocabulary) is documented in [DESIGN.md](DESIGN.md).
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for the build history.
-
-## License
-
-MIT — see [LICENSE](LICENSE). Third-party open data (StatsBomb, Metrica Sports) is under its own respective terms.
+[ARCHITECTURE.md](ARCHITECTURE.md) · [DESIGN.md](DESIGN.md) · [TESTING.md](TESTING.md) (`pytest`, green in CI) · [CHANGELOG.md](CHANGELOG.md) · MIT [LICENSE](LICENSE)
